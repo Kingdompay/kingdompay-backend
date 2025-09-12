@@ -1,0 +1,31 @@
+# version: "3.9"
+
+
+# cd to db folder and run: docker-compose up -d
+# access pgadmin at: http://localhost:5050
+services:
+  postgres:
+    image: postgres:15
+    container_name: kingdompay_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: kingdompay
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: kingdompay_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@kingdompay.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+
+volumes:
+  postgres_data:
