@@ -16,7 +16,7 @@ from api.v1 import api_v1_bp
 from services.ledger_service import LedgerService
 from services.encryption_service import EncryptionService
 
-# Load environment variables
+
 load_dotenv()
 
 
