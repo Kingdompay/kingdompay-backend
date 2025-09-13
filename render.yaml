@@ -56,6 +56,7 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: "INFO"
+
   - type: redis
     name: kingdompay-redis
     plan: free
