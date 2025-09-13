@@ -56,12 +56,13 @@ services:
         value: "false"
       - key: LOG_LEVEL
         value: "INFO"
+  - type: redis
+    name: kingdompay-redis
+    plan: free
+    ipAllowList: []
 
 databases:
   - name: kingdompay-db
     databaseName: kingdompay
     user: kingdompay_user
-    plan: free
-
-  - name: kingdompay-redis
     plan: free
