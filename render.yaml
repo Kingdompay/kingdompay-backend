@@ -1,7 +1,7 @@
 services:
   - type: web
     name: kingdompay-api
-    env: python
+    runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
@@ -59,8 +59,9 @@ services:
 
 databases:
   - name: kingdompay-db
+    databaseName: kingdompay
+    user: kingdompay_user
     plan: free
 
   - name: kingdompay-redis
-    type: redis
     plan: free

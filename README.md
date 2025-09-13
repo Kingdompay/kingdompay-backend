@@ -1,5 +1,7 @@
 # KingdomPay Backend
 
+Placeholder README
+
 A Flask-based financial platform for communities, churches, and organizations to manage digital wallets, contributions, and payments.
 
 ## Phase 1: Wallets + Communities + Giving
@@ -147,4 +149,4 @@ The project uses:
 
 ## License
 
-[Add your license here]
+
