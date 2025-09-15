@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: kingdompay-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kingdompay-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: kingdompay-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: RATELIMIT_STORAGE_URL
+        fromService:
+          type: redis
+          name: kingdompay-redis
+          property: connectionString
+      - key: JWT_ACCESS_TOKEN_EXPIRES
+        value: "3600"
+      - key: JWT_REFRESH_TOKEN_EXPIRES
+        value: "2592000"
+      - key: RATELIMIT_DEFAULT
+        value: "1000 per hour"
+      - key: DEFAULT_CURRENCY
+        value: "KES"
+      - key: MIN_TRANSFER_AMOUNT
+        value: "1.0"
+      - key: MAX_TRANSFER_AMOUNT
+        value: "1000000.0"
+      - key: WALLET_CREATION_LIMIT
+        value: "5"
+      - key: KYC_TIER_0_LIMIT
+        value: "10000.0"
+      - key: KYC_TIER_1_LIMIT
+        value: "100000.0"
+      - key: KYC_TIER_2_LIMIT
+        value: "1000000.0"
+      - key: ENABLE_KYC_TIER_1
+        value: "true"
+      - key: ENABLE_KYC_TIER_2
+        value: "false"
+      - key: ENABLE_COMMUNITY_CURRENCY
+        value: "false"
+      - key: LOG_LEVEL
+        value: "INFO"
+
+  - type: redis
+    name: kingdompay-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: kingdompay-db
+    databaseName: kingdompay
+    user: kingdompay_user
+    plan: free
