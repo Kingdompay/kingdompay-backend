@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KingdomPay - KYC Verification</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .header h1 {
+        color: #2d3748;
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 800;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header p {
+        color: #718096;
+        font-size: 1.1rem;
+      }
+
+      .nav-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .nav-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .nav-link i {
+        margin-right: 8px;
+        font-size: 1.1rem;
+      }
+
+      .kyc-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 40px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .kyc-header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+
+      .kyc-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 15px;
+      }
+
+      .kyc-subtitle {
+        color: #718096;
+        font-size: 1.1rem;
+      }
+
+      .kyc-steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-bottom: 40px;
+      }
+
+      .kyc-step {
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        border-radius: 20px;
+        padding: 30px;
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .kyc-step.active {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e6f3ff 100%);
+      }
+
+      .kyc-step.completed {
+        border-color: #48bb78;
+        background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+      }
+
+      .kyc-step::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+      }
+
+      .kyc-step.completed::before {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .step-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .step-number {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-right: 20px;
+        color: white;
+        background: #cbd5e0;
+      }
+
+      .kyc-step.active .step-number {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+      }
+
+      .kyc-step.completed .step-number {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .step-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .step-description {
+        color: #718096;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 10px;
+        color: #4a5568;
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        background: white;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .file-upload {
+        border: 2px dashed #cbd5e0;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+        background: #f7fafc;
+        transition: all 0.3s ease;
+        cursor: pointer;
+      }
+
+      .file-upload:hover {
+        border-color: #667eea;
+        background: #f0f4ff;
+      }
+
+      .file-upload.dragover {
+        border-color: #667eea;
+        background: #f0f4ff;
+        transform: scale(1.02);
+      }
+
+      .file-upload i {
+        font-size: 3rem;
+        color: #cbd5e0;
+        margin-bottom: 15px;
+      }
+
+      .file-upload-text {
+        color: #718096;
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+
+      .file-upload-subtext {
+        color: #a0aec0;
+        font-size: 0.9rem;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+      }
+
+      .btn-secondary:hover {
+        background: #cbd5e0;
+      }
+
+      .btn-success {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+        color: white;
+        box-shadow: 0 5px 15px rgba(72, 187, 120, 0.3);
+      }
+
+      .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(72, 187, 120, 0.4);
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 25px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin: 10px 0;
+      }
+
+      .status-pending {
+        background: #fef5e7;
+        color: #744210;
+      }
+
+      .status-verified {
+        background: #c6f6d5;
+        color: #22543d;
+      }
+
+      .status-rejected {
+        background: #fed7d7;
+        color: #742a2a;
+      }
+
+      .status-reviewing {
+        background: #bee3f8;
+        color: #2a4365;
+      }
+
+      .document-preview {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 1px solid #e2e8f0;
+        display: none;
+      }
+
+      .document-preview img {
+        max-width: 100%;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        margin: 20px 0;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+
+      .kyc-status {
+        background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+        border-radius: 15px;
+        padding: 25px;
+        margin: 20px 0;
+        border: 1px solid #9ae6b4;
+      }
+
+      .kyc-status h3 {
+        color: #22543d;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .kyc-status p {
+        color: #2f855a;
+        margin-bottom: 10px;
+      }
+
+      .limits-info {
+        background: linear-gradient(135deg, #fef5e7 0%, #f6e05e 100%);
+        border-radius: 15px;
+        padding: 25px;
+        margin: 20px 0;
+        border: 1px solid #f6e05e;
+      }
+
+      .limits-info h3 {
+        color: #744210;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .limits-list {
+        list-style: none;
+      }
+
+      .limits-list li {
+        color: #744210;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+      }
+
+      .limits-list li i {
+        margin-right: 10px;
+        color: #d69e2e;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 15px;
+        }
+
+        .kyc-container {
+          padding: 25px;
+        }
+
+        .kyc-steps {
+          grid-template-columns: 1fr;
+        }
+
+        .nav-menu {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .nav-link {
+          width: 100%;
+          justify-content: center;
+          max-width: 300px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .kyc-title {
+          font-size: 1.5rem;
+        }
+
+        .kyc-step {
+          padding: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1><i class="fas fa-user-check"></i> KYC Verification</h1>
+        <p>Complete your identity verification process</p>
+      </div>
+
+      <!-- Navigation Menu -->
+      <div class="nav-menu">
+        <a href="/static/index.html" class="nav-link">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/static/auth.html" class="nav-link">
+          <i class="fas fa-shield-alt"></i> Authentication
+        </a>
+        <a href="/static/wallet.html" class="nav-link">
+          <i class="fas fa-wallet"></i> Wallet
+        </a>
+        <a href="/static/transactions.html" class="nav-link">
+          <i class="fas fa-exchange-alt"></i> Transactions
+        </a>
+      </div>
+
+      <!-- KYC Container -->
+      <div class="kyc-container">
+        <div class="kyc-header">
+          <h2 class="kyc-title">Know Your Customer (KYC) Verification</h2>
+          <p class="kyc-subtitle">
+            Complete your verification to unlock higher transaction limits
+          </p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress" style="width: 20%"></div>
+        </div>
+
+        <!-- KYC Steps -->
+        <div class="kyc-steps">
+          <!-- Step 1: Personal Information -->
+          <div class="kyc-step active" id="step1">
+            <div class="step-header">
+              <div class="step-number">1</div>
+              <div class="step-title">Personal Information</div>
+            </div>
+            <div class="step-description">
+              Provide your basic personal details for identity verification
+            </div>
+
+            <div class="form-group">
+              <label for="fullName">Full Name</label>
+              <input
+                type="text"
+                id="fullName"
+                placeholder="Enter your full name"
+                value="John Doe"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="dateOfBirth">Date of Birth</label>
+              <input type="date" id="dateOfBirth" value="1990-01-15" />
+            </div>
+
+            <div class="form-group">
+              <label for="nationality">Nationality</label>
+              <select id="nationality">
+                <option value="kenyan">Kenyan</option>
+                <option value="ugandan">Ugandan</option>
+                <option value="tanzanian">Tanzanian</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="occupation">Occupation</label>
+              <input
+                type="text"
+                id="occupation"
+                placeholder="Enter your occupation"
+                value="Software Developer"
+              />
+            </div>
+
+            <button class="btn btn-primary" onclick="nextStep(1)">
+              <i class="fas fa-arrow-right"></i> Continue to Documents
+            </button>
+          </div>
+
+          <!-- Step 2: Document Upload -->
+          <div class="kyc-step" id="step2">
+            <div class="step-header">
+              <div class="step-number">2</div>
+              <div class="step-title">Document Upload</div>
+            </div>
+            <div class="step-description">
+              Upload your identity documents for verification
+            </div>
+
+            <div class="form-group">
+              <label>National ID Card</label>
+              <div
+                class="file-upload"
+                onclick="document.getElementById('nationalId').click()"
+              >
+                <i class="fas fa-id-card"></i>
+                <div class="file-upload-text">Click to upload National ID</div>
+                <div class="file-upload-subtext">JPG, PNG, PDF (Max 5MB)</div>
+              </div>
+              <input
+                type="file"
+                id="nationalId"
+                accept="image/*,.pdf"
+                style="display: none"
+                onchange="previewDocument(this, 'nationalIdPreview')"
+              />
+              <div class="document-preview" id="nationalIdPreview"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Proof of Address</label>
+              <div
+                class="file-upload"
+                onclick="document.getElementById('proofOfAddress').click()"
+              >
+                <i class="fas fa-home"></i>
+                <div class="file-upload-text">
+                  Click to upload Proof of Address
+                </div>
+                <div class="file-upload-subtext">
+                  Utility bill, bank statement, etc.
+                </div>
+              </div>
+              <input
+                type="file"
+                id="proofOfAddress"
+                accept="image/*,.pdf"
+                style="display: none"
+                onchange="previewDocument(this, 'proofOfAddressPreview')"
+              />
+              <div class="document-preview" id="proofOfAddressPreview"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Selfie Photo</label>
+              <div
+                class="file-upload"
+                onclick="document.getElementById('selfie').click()"
+              >
+                <i class="fas fa-camera"></i>
+                <div class="file-upload-text">Click to take/upload selfie</div>
+                <div class="file-upload-subtext">Clear photo of your face</div>
+              </div>
+              <input
+                type="file"
+                id="selfie"
+                accept="image/*"
+                style="display: none"
+                onchange="previewDocument(this, 'selfiePreview')"
+              />
+              <div class="document-preview" id="selfiePreview"></div>
+            </div>
+
+            <button class="btn btn-primary" onclick="nextStep(2)">
+              <i class="fas fa-arrow-right"></i> Continue to Review
+            </button>
+          </div>
+
+          <!-- Step 3: Review & Submit -->
+          <div class="kyc-step" id="step3">
+            <div class="step-header">
+              <div class="step-number">3</div>
+              <div class="step-title">Review & Submit</div>
+            </div>
+            <div class="step-description">
+              Review your information and submit for verification
+            </div>
+
+            <div class="kyc-status">
+              <h3><i class="fas fa-info-circle"></i> Verification Summary</h3>
+              <p><strong>Name:</strong> John Doe</p>
+              <p><strong>Date of Birth:</strong> January 15, 1990</p>
+              <p><strong>Nationality:</strong> Kenyan</p>
+              <p><strong>Occupation:</strong> Software Developer</p>
+              <p>
+                <strong>Documents:</strong> National ID, Proof of Address,
+                Selfie
+              </p>
+            </div>
+
+            <div class="limits-info">
+              <h3><i class="fas fa-chart-line"></i> Verification Benefits</h3>
+              <ul class="limits-list">
+                <li><i class="fas fa-check"></i> Daily limit: KES 500,000</li>
+                <li>
+                  <i class="fas fa-check"></i> Monthly limit: KES 2,000,000
+                </li>
+                <li><i class="fas fa-check"></i> Max transfer: KES 100,000</li>
+                <li><i class="fas fa-check"></i> Priority customer support</li>
+                <li><i class="fas fa-check"></i> Advanced security features</li>
+              </ul>
+            </div>
+
+            <button class="btn btn-success" onclick="submitKYC()">
+              <i class="fas fa-check"></i> Submit for Verification
+            </button>
+          </div>
+
+          <!-- Step 4: Verification Status -->
+          <div class="kyc-step" id="step4">
+            <div class="step-header">
+              <div class="step-number">4</div>
+              <div class="step-title">Verification Status</div>
+            </div>
+            <div class="step-description">
+              Your KYC verification is being processed
+            </div>
+
+            <div class="status-badge status-reviewing">
+              <i class="fas fa-clock"></i> Under Review
+            </div>
+
+            <div class="kyc-status">
+              <h3><i class="fas fa-hourglass-half"></i> Processing Status</h3>
+              <p>
+                Your documents have been submitted and are being reviewed by our
+                verification team.
+              </p>
+              <p><strong>Estimated processing time:</strong> 24-48 hours</p>
+              <p><strong>Reference ID:</strong> KYC-2024-001234</p>
+            </div>
+
+            <button class="btn btn-secondary" onclick="checkStatus()">
+              <i class="fas fa-refresh"></i> Check Status
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentStep = 1;
+      const totalSteps = 4;
+
+      function updateProgress() {
+        const progress = (currentStep / totalSteps) * 100;
+        document.getElementById("progress").style.width = progress + "%";
+      }
+
+      function nextStep(stepNumber) {
+        // Hide current step
+        document.getElementById(`step${stepNumber}`).classList.remove("active");
+        document.getElementById(`step${stepNumber}`).classList.add("completed");
+
+        // Show next step
+        currentStep = stepNumber + 1;
+        document.getElementById(`step${currentStep}`).classList.add("active");
+
+        updateProgress();
+
+        // Scroll to top of container
+        document
+          .querySelector(".kyc-container")
+          .scrollIntoView({ behavior: "smooth" });
+      }
+
+      function previewDocument(input, previewId) {
+        const preview = document.getElementById(previewId);
+        const file = input.files[0];
+
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            preview.innerHTML = `
+                        <div style="text-align: center;">
+                            <img src="${e.target.result}" alt="Document preview" style="max-width: 200px; max-height: 200px;">
+                            <p style="margin-top: 10px; color: #48bb78; font-weight: 600;">
+                                <i class="fas fa-check"></i> Document uploaded successfully
+                            </p>
+                        </div>
+                    `;
+            preview.style.display = "block";
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function submitKYC() {
+        // Simulate submission
+        alert(
+          "KYC verification submitted successfully!\n\nYour documents are being reviewed and you will receive an update within 24-48 hours."
+        );
+
+        // Move to status step
+        document.getElementById("step3").classList.remove("active");
+        document.getElementById("step3").classList.add("completed");
+        document.getElementById("step4").classList.add("active");
+        currentStep = 4;
+        updateProgress();
+      }
+
+      function checkStatus() {
+        // Simulate status check
+        const statuses = ["Under Review", "Verified", "Rejected"];
+        const randomStatus =
+          statuses[Math.floor(Math.random() * statuses.length)];
+
+        const statusBadge = document.querySelector("#step4 .status-badge");
+
+        if (randomStatus === "Verified") {
+          statusBadge.className = "status-badge status-verified";
+          statusBadge.innerHTML =
+            '<i class="fas fa-check-circle"></i> Verified';
+          alert("Congratulations! Your KYC verification has been approved.");
+        } else if (randomStatus === "Rejected") {
+          statusBadge.className = "status-badge status-rejected";
+          statusBadge.innerHTML =
+            '<i class="fas fa-times-circle"></i> Rejected';
+          alert(
+            "Your KYC verification was rejected. Please check your documents and resubmit."
+          );
+        } else {
+          statusBadge.className = "status-badge status-reviewing";
+          statusBadge.innerHTML = '<i class="fas fa-clock"></i> Under Review';
+          alert(
+            "Your KYC verification is still under review. Please check back later."
+          );
+        }
+      }
+
+      // Initialize
+      updateProgress();
+
+      // Add drag and drop functionality
+      document.querySelectorAll(".file-upload").forEach((upload) => {
+        upload.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          this.classList.add("dragover");
+        });
+
+        upload.addEventListener("dragleave", function (e) {
+          e.preventDefault();
+          this.classList.remove("dragover");
+        });
+
+        upload.addEventListener("drop", function (e) {
+          e.preventDefault();
+          this.classList.remove("dragover");
+
+          const files = e.dataTransfer.files;
+          if (files.length > 0) {
+            const input =
+              this.parentElement.querySelector('input[type="file"]');
+            input.files = files;
+            input.dispatchEvent(new Event("change"));
+          }
+        });
+      });
+
+      // Animate steps on load
+      document.addEventListener("DOMContentLoaded", function () {
+        const steps = document.querySelectorAll(".kyc-step");
+        steps.forEach((step, index) => {
+          step.style.opacity = "0";
+          step.style.transform = "translateY(20px)";
+          setTimeout(() => {
+            step.style.transition = "all 0.6s ease";
+            step.style.opacity = "1";
+            step.style.transform = "translateY(0)";
+          }, index * 200);
+        });
+      });
+    </script>
+  </body>
+</html>

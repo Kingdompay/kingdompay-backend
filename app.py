@@ -4,17 +4,20 @@ Phase 1: Wallets + Communities + Giving
 """
 
 import os
-from flask import Flask
+from flask import Flask, render_template
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
 from config import Config
-from extensions import db, migrate, jwt, mail, limiter, redis_client
+from extensions import db, migrate, jwt, mail, limiter, redis_client, cache_service
 from api.v1 import api_v1_bp
 from services.ledger_service import LedgerService
 from services.encryption_service import EncryptionService
+from services.health_service import HealthService
+from services.kyc_service import KYCService
+from models import User, Wallet, Transaction, OTPVerification
 
 
 load_dotenv()
@@ -36,14 +39,66 @@ def create_app(config_class=Config):
     # Initialize services
     app.ledger_service = LedgerService()
     app.encryption_service = EncryptionService()
+    app.cache_service = cache_service
+    app.health_service = HealthService()
+    app.kyc_service = KYCService()
 
     # Register blueprints
     app.register_blueprint(api_v1_bp, url_prefix="/api/v1")
 
-    # Health check endpoint
+    # Template routes for frontend demos
+    @app.route("/")
+    def index():
+        """Main dashboard template"""
+        try:
+            return render_template("index.html")
+        except:
+            return "KingdomPay API is running! Visit /dashboard for the frontend demo."
+
+    @app.route("/dashboard")
+    def dashboard():
+        """Dashboard template"""
+        try:
+            return render_template("index.html")
+        except:
+            return "Dashboard template not found"
+
+    @app.route("/auth-demo")
+    def auth_demo():
+        """Authentication flow demo"""
+        try:
+            return render_template("auth.html")
+        except:
+            return "Auth demo template not found"
+
+    @app.route("/wallet-demo")
+    def wallet_demo():
+        """Wallet dashboard demo"""
+        try:
+            return render_template("wallet.html")
+        except:
+            return "Wallet demo template not found"
+
+    # Health check endpoints
     @app.route("/health")
     def health_check():
+        """Basic health check endpoint"""
         return {"status": "healthy", "service": "kingdompay-api", "version": "1.0.0"}
+
+    @app.route("/health/detailed")
+    def detailed_health_check():
+        """Detailed health check with system metrics"""
+        return app.health_service.get_system_health()
+
+    @app.route("/health/ready")
+    def readiness_check():
+        """Kubernetes readiness probe endpoint"""
+        return app.health_service.get_readiness()
+
+    @app.route("/health/live")
+    def liveness_check():
+        """Kubernetes liveness probe endpoint"""
+        return app.health_service.get_liveness()
 
     # Error handlers
     @app.errorhandler(400)
@@ -79,4 +134,4 @@ def create_app(config_class=Config):
 
 if __name__ == "__main__":
     app = create_app()
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5001)

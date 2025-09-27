@@ -7,11 +7,6 @@ from datetime import timedelta
 
 import secrets
 
-print(secrets.token_urlsafe(32))  # For SECRET_KEY
-print(secrets.token_urlsafe(32))  # For JWT_SECRET_KEY
-
-print(os.urandom(32).hex())  # For ENCRYPTION_KEY
-
 
 class Config:
     """Base configuration"""
@@ -27,10 +22,11 @@ class Config:
     )
 
     # Database Configuration
-    SQLALCHEMY_DATABASE_URI = (
-        os.environ.get("DATABASE_URL")
-        or "postgresql://admin:admin123@localhost:5432/kingdompay"
-    )
+    # If DATABASE_URL is not provided, default to a local SQLite database for development
+    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+    if not SQLALCHEMY_DATABASE_URI:
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{os.path.join(BASE_DIR, 'kingdompay.db')}"
 
     # Handle Render's PostgreSQL URL format
     if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("postgres://"):
@@ -53,7 +49,7 @@ class Config:
 
     # Rate Limiting
     RATELIMIT_STORAGE_URL = os.environ.get("RATELIMIT_STORAGE_URL")
-    RATELIMIT_DEFAULT = "1000 per hour"
+    RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "1000 per hour")
 
     # External Services
     SMS_PROVIDER_API_KEY = os.environ.get("SMS_PROVIDER_API_KEY")
@@ -93,6 +89,23 @@ class Config:
     KYC_TIER_0_LIMIT = 10000.0  # Phone verified
     KYC_TIER_1_LIMIT = 100000.0  # ID verified
     KYC_TIER_2_LIMIT = 1000000.0  # Enhanced verification
+
+    # Guardrails: In production, require critical secrets and disallow SQLite
+    APP_ENV = os.environ.get("APP_ENV", "development").lower()
+    if APP_ENV == "production":
+        required_envs = [
+            ("SECRET_KEY", SECRET_KEY),
+            ("JWT_SECRET_KEY", JWT_SECRET_KEY),
+            ("ENCRYPTION_KEY", os.environ.get("ENCRYPTION_KEY")),
+            ("DATABASE_URL", os.environ.get("DATABASE_URL")),
+        ]
+        missing = [name for name, value in required_envs if not value]
+        if missing:
+            raise RuntimeError(
+                f"Missing required environment variables in production: {', '.join(missing)}"
+            )
+        if SQLALCHEMY_DATABASE_URI.startswith("sqlite:///"):
+            raise RuntimeError("SQLite is not allowed in production. Set DATABASE_URL.")
 
 
 class DevelopmentConfig(Config):

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KingdomPay - Authentication Flow</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .header h1 {
+        color: #2d3748;
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 800;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header p {
+        color: #718096;
+        font-size: 1.1rem;
+      }
+
+      .nav-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .nav-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .nav-link i {
+        margin-right: 8px;
+        font-size: 1.1rem;
+      }
+
+      .auth-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 40px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        max-width: 500px;
+        margin: 0 auto;
+      }
+
+      .auth-header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .auth-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 10px;
+      }
+
+      .auth-subtitle {
+        color: #718096;
+        font-size: 1rem;
+      }
+
+      .step {
+        margin-bottom: 30px;
+        padding: 30px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .step.active {
+        border-color: #667eea;
+        background: linear-gradient(135deg, #f0f4ff 0%, #e6f3ff 100%);
+      }
+
+      .step.completed {
+        border-color: #48bb78;
+        background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+      }
+
+      .step::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+      }
+
+      .step.completed::before {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .step-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .step-number {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-right: 20px;
+        color: white;
+        background: #cbd5e0;
+      }
+
+      .step.active .step-number {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+      }
+
+      .step.completed .step-number {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .step-title {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .step-description {
+        color: #718096;
+        margin-bottom: 20px;
+        line-height: 1.6;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+        text-align: left;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 10px;
+        color: #4a5568;
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .form-group input {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        background: white;
+      }
+
+      .form-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .btn {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+      }
+
+      .btn-secondary:hover {
+        background: #cbd5e0;
+      }
+
+      .status-message {
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        font-weight: 600;
+      }
+
+      .status-success {
+        background: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #9ae6b4;
+      }
+
+      .status-info {
+        background: #bee3f8;
+        color: #2a4365;
+        border: 1px solid #90cdf4;
+      }
+
+      .otp-display {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        font-size: 1.8rem;
+        font-weight: 700;
+        letter-spacing: 4px;
+        text-align: center;
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      }
+
+      .user-info {
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        text-align: left;
+        border: 1px solid #e2e8f0;
+      }
+
+      .user-info h3 {
+        color: #2d3748;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .user-info p {
+        color: #718096;
+        margin-bottom: 8px;
+      }
+
+      .tokens {
+        background: linear-gradient(135deg, #f0fff4 0%, #e6fffa 100%);
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        border: 1px solid #9ae6b4;
+      }
+
+      .tokens h3 {
+        color: #22543d;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .token {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 15px 0;
+        font-family: "JetBrains Mono", "Courier New", monospace;
+        font-size: 0.9rem;
+        word-break: break-all;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        margin: 20px 0;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+
+      .api-response {
+        background: #1a202c;
+        color: #e2e8f0;
+        padding: 25px;
+        border-radius: 15px;
+        margin: 20px 0;
+        font-family: "JetBrains Mono", "Courier New", monospace;
+        font-size: 0.9rem;
+        text-align: left;
+        overflow-x: auto;
+        border: 1px solid #2d3748;
+      }
+
+      .security-features {
+        background: linear-gradient(135deg, #fef5e7 0%, #f6e05e 100%);
+        border-radius: 15px;
+        padding: 25px;
+        margin: 20px 0;
+        border: 1px solid #f6e05e;
+      }
+
+      .security-features h3 {
+        color: #744210;
+        margin-bottom: 15px;
+        font-size: 1.3rem;
+      }
+
+      .security-list {
+        list-style: none;
+      }
+
+      .security-list li {
+        color: #744210;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+      }
+
+      .security-list li i {
+        margin-right: 12px;
+        color: #d69e2e;
+        width: 20px;
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 15px;
+        }
+
+        .auth-container {
+          padding: 25px;
+        }
+
+        .nav-menu {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .nav-link {
+          width: 100%;
+          justify-content: center;
+          max-width: 300px;
+        }
+
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .auth-title {
+          font-size: 1.5rem;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .auth-container {
+          padding: 20px;
+        }
+
+        .step {
+          padding: 20px;
+        }
+
+        .otp-display {
+          font-size: 1.5rem;
+          letter-spacing: 3px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1><i class="fas fa-shield-alt"></i> Authentication Flow</h1>
+        <p>Secure phone number verification and user registration</p>
+      </div>
+
+      <!-- Navigation Menu -->
+      <div class="nav-menu">
+        <a href="/static/index.html" class="nav-link">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/static/wallet.html" class="nav-link">
+          <i class="fas fa-wallet"></i> Wallet
+        </a>
+        <a href="/static/kyc.html" class="nav-link">
+          <i class="fas fa-user-check"></i> KYC
+        </a>
+        <a href="/static/transactions.html" class="nav-link">
+          <i class="fas fa-exchange-alt"></i> Transactions
+        </a>
+      </div>
+
+      <!-- Auth Container -->
+      <div class="auth-container">
+        <div class="auth-header">
+          <h2 class="auth-title">Secure Authentication</h2>
+          <p class="auth-subtitle">
+            Complete the verification process to access your account
+          </p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress" style="width: 33%"></div>
+        </div>
+
+        <!-- Step 1: Request OTP -->
+        <div class="step active" id="step1">
+          <div class="step-header">
+            <div class="step-number">1</div>
+            <div class="step-title">Phone Verification</div>
+          </div>
+          <div class="step-description">
+            Enter your phone number to receive a verification code via SMS
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Phone Number</label>
+            <input
+              type="tel"
+              id="phone"
+              placeholder="+254712345678"
+              value="+254712345678"
+            />
+          </div>
+
+          <button class="btn btn-primary" onclick="requestOTP()">
+            <i class="fas fa-paper-plane"></i> Send Verification Code
+          </button>
+
+          <div
+            class="status-message status-info"
+            id="otp-status"
+            style="display: none"
+          >
+            <i class="fas fa-info-circle"></i> Verification code sent
+            successfully!
+          </div>
+
+          <div class="security-features">
+            <h3><i class="fas fa-lock"></i> Security Features</h3>
+            <ul class="security-list">
+              <li><i class="fas fa-shield-alt"></i> End-to-end encryption</li>
+              <li><i class="fas fa-clock"></i> OTP expires in 5 minutes</li>
+              <li><i class="fas fa-ban"></i> Rate limiting protection</li>
+              <li><i class="fas fa-user-secret"></i> Privacy-first approach</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Step 2: Verify OTP -->
+        <div class="step" id="step2">
+          <div class="step-header">
+            <div class="step-number">2</div>
+            <div class="step-title">Code Verification</div>
+          </div>
+          <div class="step-description">
+            Enter the 6-digit verification code sent to your phone
+          </div>
+
+          <div class="otp-display" id="otp-display" style="display: none">
+            123456
+          </div>
+
+          <div class="form-group">
+            <label for="otp">Verification Code</label>
+            <input type="text" id="otp" placeholder="123456" maxlength="6" />
+          </div>
+
+          <div class="form-group">
+            <label for="fullname">Full Name</label>
+            <input
+              type="text"
+              id="fullname"
+              placeholder="Enter your full name"
+              value="John Doe"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email Address (Optional)</label>
+            <input
+              type="email"
+              id="email"
+              placeholder="john@example.com"
+              value="john@example.com"
+            />
+          </div>
+
+          <button class="btn btn-primary" onclick="verifyOTP()">
+            <i class="fas fa-check"></i> Verify & Create Account
+          </button>
+        </div>
+
+        <!-- Step 3: Authentication Success -->
+        <div class="step" id="step3">
+          <div class="step-header">
+            <div class="step-number">3</div>
+            <div class="step-title">Account Created</div>
+          </div>
+          <div class="step-description">
+            Welcome! Your account has been created successfully
+          </div>
+
+          <div class="status-message status-success">
+            <i class="fas fa-check-circle"></i> Authentication successful!
+          </div>
+
+          <div class="user-info" id="user-info" style="display: none">
+            <h3><i class="fas fa-user"></i> Account Information</h3>
+            <p><strong>Name:</strong> John Doe</p>
+            <p><strong>Phone:</strong> +254712345678</p>
+            <p><strong>Email:</strong> john@example.com</p>
+            <p><strong>Status:</strong> Verified</p>
+            <p><strong>Wallet:</strong> WAL-123456789</p>
+            <p><strong>Created:</strong> Just now</p>
+          </div>
+
+          <div class="tokens" id="tokens" style="display: none">
+            <h3><i class="fas fa-key"></i> Authentication Tokens</h3>
+            <div class="token">
+              <strong>Access Token:</strong><br />
+              eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsImV4cCI6MTczNzgwODQwMH0.example_access_token_here
+            </div>
+            <div class="token">
+              <strong>Refresh Token:</strong><br />
+              eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOjEsImV4cCI6MTczNzgwODQwMH0.example_refresh_token_here
+            </div>
+          </div>
+
+          <button class="btn btn-secondary" onclick="testAPI()">
+            <i class="fas fa-code"></i> Test API Endpoints
+          </button>
+
+          <button class="btn btn-primary" onclick="continueToWallet()">
+            <i class="fas fa-wallet"></i> Continue to Wallet
+          </button>
+        </div>
+
+        <!-- API Response -->
+        <div class="api-response" id="api-response" style="display: none">
+          <div><strong>API Response:</strong></div>
+          <div id="response-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentStep = 1;
+      const totalSteps = 3;
+
+      function updateProgress() {
+        const progress = (currentStep / totalSteps) * 100;
+        document.getElementById("progress").style.width = progress + "%";
+      }
+
+      function requestOTP() {
+        const phone = document.getElementById("phone").value;
+
+        if (!phone) {
+          alert("Please enter your phone number");
+          return;
+        }
+
+        // Show OTP in demo
+        document.getElementById("otp-display").style.display = "block";
+        document.getElementById("otp-status").style.display = "block";
+
+        // Move to next step
+        setTimeout(() => {
+          document.getElementById("step1").classList.remove("active");
+          document.getElementById("step1").classList.add("completed");
+          document.getElementById("step2").classList.add("active");
+          currentStep = 2;
+          updateProgress();
+
+          // Scroll to step
+          document
+            .getElementById("step2")
+            .scrollIntoView({ behavior: "smooth" });
+        }, 1500);
+      }
+
+      function verifyOTP() {
+        const otp = document.getElementById("otp").value;
+        const fullname = document.getElementById("fullname").value;
+        const email = document.getElementById("email").value;
+
+        if (!otp || !fullname) {
+          alert("Please fill in all required fields");
+          return;
+        }
+
+        if (otp === "123456") {
+          // Show success
+          document.getElementById("step2").classList.remove("active");
+          document.getElementById("step2").classList.add("completed");
+          document.getElementById("step3").classList.add("active");
+          document.getElementById("user-info").style.display = "block";
+          document.getElementById("tokens").style.display = "block";
+          currentStep = 3;
+          updateProgress();
+
+          // Scroll to step
+          document
+            .getElementById("step3")
+            .scrollIntoView({ behavior: "smooth" });
+        } else {
+          alert("Invalid verification code. Please try again.");
+        }
+      }
+
+      function testAPI() {
+        const apiResponse = document.getElementById("api-response");
+        const responseContent = document.getElementById("response-content");
+
+        // Simulate API calls
+        const responses = [
+          {
+            endpoint: "GET /health",
+            status: "200 OK",
+            response: {
+              service: "kingdompay-api",
+              status: "healthy",
+              version: "1.0.0",
+              timestamp: new Date().toISOString(),
+            },
+          },
+          {
+            endpoint: "POST /api/v1/auth/otp/request",
+            status: "200 OK",
+            response: {
+              success: true,
+              message: "OTP sent successfully",
+              phone_number: "+254712345678",
+              expires_in: 300,
+            },
+          },
+          {
+            endpoint: "POST /api/v1/auth/otp/verify",
+            status: "200 OK",
+            response: {
+              success: true,
+              message: "OTP verified successfully",
+              user: {
+                id: 1,
+                full_name: "John Doe",
+                phone_number: "+254712345678",
+                email: "john@example.com",
+                is_phone_verified: true,
+                wallet_number: "WAL-123456789",
+              },
+              tokens: {
+                access_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                refresh_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                expires_in: 3600,
+              },
+            },
+          },
+          {
+            endpoint: "GET /api/v1/wallets/balance",
+            status: "200 OK",
+            response: {
+              success: true,
+              wallet: {
+                balance: 0.0,
+                currency: "KES",
+                wallet_number: "WAL-123456789",
+                status: "active",
+              },
+            },
+          },
+        ];
+
+        let html = "";
+        responses.forEach((resp, index) => {
+          html += `<div style="margin-bottom: 20px; padding: 15px; background: #2d3748; border-radius: 10px; border-left: 4px solid #48bb78;">`;
+          html += `<div style="color: #48bb78; font-weight: bold; margin-bottom: 10px;">${resp.endpoint} - ${resp.status}</div>`;
+          html += `<div style="color: #e2e8f0; font-size: 0.85rem;">${JSON.stringify(
+            resp.response,
+            null,
+            2
+          )}</div>`;
+          html += `</div>`;
+        });
+
+        responseContent.innerHTML = html;
+        apiResponse.style.display = "block";
+
+        // Scroll to response
+        apiResponse.scrollIntoView({ behavior: "smooth" });
+      }
+
+      function continueToWallet() {
+        window.location.href = "/static/wallet.html";
+      }
+
+      // Initialize
+      updateProgress();
+
+      // Animate steps on load
+      document.addEventListener("DOMContentLoaded", function () {
+        const steps = document.querySelectorAll(".step");
+        steps.forEach((step, index) => {
+          step.style.opacity = "0";
+          step.style.transform = "translateY(20px)";
+          setTimeout(() => {
+            step.style.transition = "all 0.6s ease";
+            step.style.opacity = "1";
+            step.style.transform = "translateY(0)";
+          }, index * 200);
+        });
+      });
+
+      // Auto-focus on OTP input when step 2 becomes active
+      const observer = new MutationObserver(function (mutations) {
+        mutations.forEach(function (mutation) {
+          if (
+            mutation.type === "attributes" &&
+            mutation.attributeName === "class"
+          ) {
+            const step2 = document.getElementById("step2");
+            if (step2.classList.contains("active")) {
+              setTimeout(() => {
+                document.getElementById("otp").focus();
+              }, 500);
+            }
+          }
+        });
+      });
+
+      observer.observe(document.getElementById("step2"), {
+        attributes: true,
+      });
+    </script>
+  </body>
+</html>
