@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KingdomPay - Transaction History</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .header h1 {
+        color: #2d3748;
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 800;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .header p {
+        color: #718096;
+        font-size: 1.1rem;
+      }
+
+      .nav-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .nav-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .nav-link i {
+        margin-right: 8px;
+        font-size: 1.1rem;
+      }
+
+      .transactions-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 40px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .transactions-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        flex-wrap: wrap;
+        gap: 20px;
+      }
+
+      .transactions-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2d3748;
+      }
+
+      .filter-tabs {
+        display: flex;
+        background: #f7fafc;
+        border-radius: 15px;
+        padding: 5px;
+        gap: 5px;
+      }
+
+      .filter-tab {
+        padding: 10px 20px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        color: #718096;
+      }
+
+      .filter-tab.active {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .transaction-item {
+        display: flex;
+        align-items: center;
+        padding: 25px;
+        margin: 15px 0;
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        border-radius: 20px;
+        border-left: 5px solid #48bb78;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .transaction-item.debit {
+        border-left-color: #f56565;
+      }
+
+      .transaction-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+      }
+
+      .transaction-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20px;
+        color: white;
+        font-size: 1.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      }
+
+      .transaction-icon.credit {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .transaction-icon.debit {
+        background: linear-gradient(45deg, #f56565, #e53e3e);
+      }
+
+      .transaction-icon.pending {
+        background: linear-gradient(45deg, #f6e05e, #d69e2e);
+      }
+
+      .transaction-details {
+        flex: 1;
+      }
+
+      .transaction-description {
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 8px;
+        font-size: 1.1rem;
+      }
+
+      .transaction-date {
+        color: #718096;
+        font-size: 0.95rem;
+        margin-bottom: 5px;
+      }
+
+      .transaction-reference {
+        color: #a0aec0;
+        font-size: 0.9rem;
+        font-family: "JetBrains Mono", "Courier New", monospace;
+      }
+
+      .transaction-amount {
+        font-weight: 800;
+        font-size: 1.3rem;
+        text-align: right;
+      }
+
+      .amount-credit {
+        color: #48bb78;
+      }
+
+      .amount-debit {
+        color: #f56565;
+      }
+
+      .transaction-status {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-top: 10px;
+      }
+
+      .status-completed {
+        background: #c6f6d5;
+        color: #22543d;
+      }
+
+      .status-pending {
+        background: #fef5e7;
+        color: #744210;
+      }
+
+      .status-failed {
+        background: #fed7d7;
+        color: #742a2a;
+      }
+
+      .quick-actions {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .action-card {
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        border-radius: 20px;
+        padding: 25px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid transparent;
+      }
+
+      .action-card:hover {
+        transform: translateY(-5px);
+        border-color: #667eea;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+      }
+
+      .action-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 15px;
+        color: white;
+        font-size: 1.5rem;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      }
+
+      .action-icon.send {
+        background: linear-gradient(45deg, #f56565, #e53e3e);
+      }
+
+      .action-icon.receive {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+      }
+
+      .action-icon.request {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+      }
+
+      .action-icon.split {
+        background: linear-gradient(45deg, #f093fb, #f5576c);
+      }
+
+      .action-title {
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 8px;
+      }
+
+      .action-description {
+        color: #718096;
+        font-size: 0.9rem;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .stat-card {
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        border-radius: 20px;
+        padding: 25px;
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .stat-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #2d3748;
+        margin-bottom: 10px;
+      }
+
+      .stat-label {
+        color: #718096;
+        font-weight: 600;
+      }
+
+      .stat-change {
+        font-size: 0.9rem;
+        margin-top: 5px;
+      }
+
+      .stat-change.positive {
+        color: #48bb78;
+      }
+
+      .stat-change.negative {
+        color: #f56565;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        background: white;
+        margin: 5% auto;
+        padding: 40px;
+        border-radius: 25px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+        position: relative;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+      }
+
+      .modal-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #2d3748;
+      }
+
+      .close {
+        font-size: 2rem;
+        cursor: pointer;
+        color: #718096;
+        transition: color 0.3s ease;
+      }
+
+      .close:hover {
+        color: #2d3748;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 10px;
+        color: #4a5568;
+        font-weight: 600;
+        font-size: 1rem;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        background: white;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      }
+
+      .btn {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-success {
+        background: linear-gradient(45deg, #48bb78, #38a169);
+        color: white;
+        box-shadow: 0 5px 15px rgba(72, 187, 120, 0.3);
+      }
+
+      .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(72, 187, 120, 0.4);
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          padding: 15px;
+        }
+
+        .transactions-container {
+          padding: 25px;
+        }
+
+        .transactions-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .filter-tabs {
+          justify-content: center;
+        }
+
+        .nav-menu {
+          flex-direction: column;
+          align-items: center;
+        }
+
+        .nav-link {
+          width: 100%;
+          justify-content: center;
+          max-width: 300px;
+        }
+
+        .transaction-item {
+          flex-direction: column;
+          text-align: center;
+        }
+
+        .transaction-icon {
+          margin: 0 0 15px 0;
+        }
+
+        .transaction-amount {
+          text-align: center;
+          margin-top: 10px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header h1 {
+          font-size: 2rem;
+        }
+
+        .transactions-title {
+          font-size: 1.5rem;
+        }
+
+        .modal-content {
+          padding: 25px;
+          margin: 10% auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <h1><i class="fas fa-exchange-alt"></i> Transaction History</h1>
+        <p>Manage your financial transactions and payments</p>
+      </div>
+
+      <!-- Navigation Menu -->
+      <div class="nav-menu">
+        <a href="/static/index.html" class="nav-link">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/static/auth.html" class="nav-link">
+          <i class="fas fa-shield-alt"></i> Authentication
+        </a>
+        <a href="/static/wallet.html" class="nav-link">
+          <i class="fas fa-wallet"></i> Wallet
+        </a>
+        <a href="/static/kyc.html" class="nav-link">
+          <i class="fas fa-user-check"></i> KYC
+        </a>
+      </div>
+
+      <!-- Transactions Container -->
+      <div class="transactions-container">
+        <div class="transactions-header">
+          <h2 class="transactions-title">Transaction History</h2>
+          <div class="filter-tabs">
+            <div class="filter-tab active" onclick="filterTransactions('all')">
+              All
+            </div>
+            <div class="filter-tab" onclick="filterTransactions('credit')">
+              Received
+            </div>
+            <div class="filter-tab" onclick="filterTransactions('debit')">
+              Sent
+            </div>
+            <div class="filter-tab" onclick="filterTransactions('pending')">
+              Pending
+            </div>
+          </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-number">KES 45,200</div>
+            <div class="stat-label">Total Volume</div>
+            <div class="stat-change positive">+12.5% this month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">24</div>
+            <div class="stat-label">Transactions</div>
+            <div class="stat-change positive">+3 this week</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">KES 1,890</div>
+            <div class="stat-label">Average Amount</div>
+            <div class="stat-change negative">-5.2% this month</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">98.5%</div>
+            <div class="stat-label">Success Rate</div>
+            <div class="stat-change positive">+0.3% this month</div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="quick-actions">
+          <div class="action-card" onclick="openModal('sendModal')">
+            <div class="action-icon send">
+              <i class="fas fa-paper-plane"></i>
+            </div>
+            <div class="action-title">Send Money</div>
+            <div class="action-description">
+              Transfer funds to another wallet
+            </div>
+          </div>
+          <div class="action-card" onclick="openModal('requestModal')">
+            <div class="action-icon receive">
+              <i class="fas fa-hand-holding-usd"></i>
+            </div>
+            <div class="action-title">Request Money</div>
+            <div class="action-description">Request payment from others</div>
+          </div>
+          <div class="action-card" onclick="openModal('splitModal')">
+            <div class="action-icon split">
+              <i class="fas fa-users"></i>
+            </div>
+            <div class="action-title">Split Bill</div>
+            <div class="action-description">Split expenses with friends</div>
+          </div>
+          <div class="action-card" onclick="generateQR()">
+            <div class="action-icon request">
+              <i class="fas fa-qrcode"></i>
+            </div>
+            <div class="action-title">QR Payment</div>
+            <div class="action-description">Generate QR for payments</div>
+          </div>
+        </div>
+
+        <!-- Transaction List -->
+        <div id="transactionList">
+          <div class="transaction-item credit">
+            <div class="transaction-icon credit">
+              <i class="fas fa-arrow-down"></i>
+            </div>
+            <div class="transaction-details">
+              <div class="transaction-description">
+                Payment from Sarah Johnson
+              </div>
+              <div class="transaction-date">Today, 2:30 PM</div>
+              <div class="transaction-reference">TXN-2024-001234</div>
+              <div class="transaction-status status-completed">
+                <i class="fas fa-check-circle"></i> Completed
+              </div>
+            </div>
+            <div class="transaction-amount amount-credit">+KES 5,000.00</div>
+          </div>
+
+          <div class="transaction-item debit">
+            <div class="transaction-icon debit">
+              <i class="fas fa-arrow-up"></i>
+            </div>
+            <div class="transaction-details">
+              <div class="transaction-description">Transfer to John Doe</div>
+              <div class="transaction-date">Today, 1:15 PM</div>
+              <div class="transaction-reference">TXN-2024-001233</div>
+              <div class="transaction-status status-completed">
+                <i class="fas fa-check-circle"></i> Completed
+              </div>
+            </div>
+            <div class="transaction-amount amount-debit">-KES 2,500.00</div>
+          </div>
+
+          <div class="transaction-item pending">
+            <div class="transaction-icon pending">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div class="transaction-details">
+              <div class="transaction-description">Bank Transfer Deposit</div>
+              <div class="transaction-date">Today, 12:00 PM</div>
+              <div class="transaction-reference">TXN-2024-001232</div>
+              <div class="transaction-status status-pending">
+                <i class="fas fa-clock"></i> Pending
+              </div>
+            </div>
+            <div class="transaction-amount amount-credit">+KES 10,000.00</div>
+          </div>
+
+          <div class="transaction-item credit">
+            <div class="transaction-details">
+              <div class="transaction-icon credit">
+                <i class="fas fa-arrow-down"></i>
+              </div>
+              <div class="transaction-details">
+                <div class="transaction-description">Payment Received</div>
+                <div class="transaction-date">Yesterday, 4:45 PM</div>
+                <div class="transaction-reference">TXN-2024-001231</div>
+                <div class="transaction-status status-completed">
+                  <i class="fas fa-check-circle"></i> Completed
+                </div>
+              </div>
+              <div class="transaction-amount amount-credit">+KES 1,200.00</div>
+            </div>
+          </div>
+
+          <div class="transaction-item debit">
+            <div class="transaction-icon debit">
+              <i class="fas fa-arrow-up"></i>
+            </div>
+            <div class="transaction-details">
+              <div class="transaction-description">Mobile Money Withdrawal</div>
+              <div class="transaction-date">Yesterday, 3:20 PM</div>
+              <div class="transaction-reference">TXN-2024-001230</div>
+              <div class="transaction-status status-completed">
+                <i class="fas fa-check-circle"></i> Completed
+              </div>
+            </div>
+            <div class="transaction-amount amount-debit">-KES 3,000.00</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Send Money Modal -->
+    <div id="sendModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">Send Money</div>
+          <span class="close" onclick="closeModal('sendModal')">&times;</span>
+        </div>
+        <div class="form-group">
+          <label for="recipientWallet">Recipient Wallet Number</label>
+          <input type="text" id="recipientWallet" placeholder="WAL-987654321" />
+        </div>
+        <div class="form-group">
+          <label for="sendAmount">Amount (KES)</label>
+          <input type="number" id="sendAmount" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label for="sendDescription">Description</label>
+          <input
+            type="text"
+            id="sendDescription"
+            placeholder="Payment description"
+          />
+        </div>
+        <button class="btn btn-primary" onclick="processSend()">
+          <i class="fas fa-paper-plane"></i> Send Money
+        </button>
+      </div>
+    </div>
+
+    <!-- Request Money Modal -->
+    <div id="requestModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">Request Money</div>
+          <span class="close" onclick="closeModal('requestModal')"
+            >&times;</span
+          >
+        </div>
+        <div class="form-group">
+          <label for="requesterWallet">Requester Wallet Number</label>
+          <input type="text" id="requesterWallet" placeholder="WAL-123456789" />
+        </div>
+        <div class="form-group">
+          <label for="requestAmount">Amount (KES)</label>
+          <input type="number" id="requestAmount" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label for="requestDescription">Description</label>
+          <input
+            type="text"
+            id="requestDescription"
+            placeholder="Request description"
+          />
+        </div>
+        <button class="btn btn-success" onclick="processRequest()">
+          <i class="fas fa-hand-holding-usd"></i> Send Request
+        </button>
+      </div>
+    </div>
+
+    <!-- Split Bill Modal -->
+    <div id="splitModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">Split Bill</div>
+          <span class="close" onclick="closeModal('splitModal')">&times;</span>
+        </div>
+        <div class="form-group">
+          <label for="splitAmount">Total Amount (KES)</label>
+          <input type="number" id="splitAmount" placeholder="0.00" />
+        </div>
+        <div class="form-group">
+          <label for="splitPeople">Number of People</label>
+          <input type="number" id="splitPeople" placeholder="2" min="2" />
+        </div>
+        <div class="form-group">
+          <label for="splitDescription">Description</label>
+          <input
+            type="text"
+            id="splitDescription"
+            placeholder="Restaurant bill, etc."
+          />
+        </div>
+        <button class="btn btn-primary" onclick="processSplit()">
+          <i class="fas fa-users"></i> Split Bill
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function openModal(modalId) {
+        document.getElementById(modalId).style.display = "block";
+      }
+
+      function closeModal(modalId) {
+        document.getElementById(modalId).style.display = "none";
+      }
+
+      function filterTransactions(type) {
+        const tabs = document.querySelectorAll(".filter-tab");
+        tabs.forEach((tab) => tab.classList.remove("active"));
+        event.target.classList.add("active");
+
+        const transactions = document.querySelectorAll(".transaction-item");
+        transactions.forEach((transaction) => {
+          if (type === "all") {
+            transaction.style.display = "flex";
+          } else if (type === "credit") {
+            transaction.style.display = transaction.classList.contains("credit")
+              ? "flex"
+              : "none";
+          } else if (type === "debit") {
+            transaction.style.display = transaction.classList.contains("debit")
+              ? "flex"
+              : "none";
+          } else if (type === "pending") {
+            transaction.style.display = transaction.classList.contains(
+              "pending"
+            )
+              ? "flex"
+              : "none";
+          }
+        });
+      }
+
+      function processSend() {
+        const recipient = document.getElementById("recipientWallet").value;
+        const amount = document.getElementById("sendAmount").value;
+        const description = document.getElementById("sendDescription").value;
+
+        if (recipient && amount && description) {
+          alert(
+            `Money sent successfully!\nTo: ${recipient}\nAmount: KES ${amount}\nDescription: ${description}`
+          );
+          closeModal("sendModal");
+          addTransaction(
+            "debit",
+            amount,
+            description,
+            "Transfer to " + recipient
+          );
+        } else {
+          alert("Please fill in all fields");
+        }
+      }
+
+      function processRequest() {
+        const requester = document.getElementById("requesterWallet").value;
+        const amount = document.getElementById("requestAmount").value;
+        const description = document.getElementById("requestDescription").value;
+
+        if (requester && amount && description) {
+          alert(
+            `Money request sent!\nTo: ${requester}\nAmount: KES ${amount}\nDescription: ${description}`
+          );
+          closeModal("requestModal");
+        } else {
+          alert("Please fill in all fields");
+        }
+      }
+
+      function processSplit() {
+        const amount = document.getElementById("splitAmount").value;
+        const people = document.getElementById("splitPeople").value;
+        const description = document.getElementById("splitDescription").value;
+
+        if (amount && people && description) {
+          const splitAmount = (amount / people).toFixed(2);
+          alert(
+            `Bill split created!\nTotal: KES ${amount}\nPer person: KES ${splitAmount}\nPeople: ${people}\nDescription: ${description}`
+          );
+          closeModal("splitModal");
+        } else {
+          alert("Please fill in all fields");
+        }
+      }
+
+      function generateQR() {
+        alert(
+          "QR Code generated!\n\nShare this QR code with others to receive payments instantly."
+        );
+      }
+
+      function addTransaction(type, amount, description, recipient) {
+        const transactionList = document.getElementById("transactionList");
+        const newTransaction = document.createElement("div");
+        newTransaction.className = `transaction-item ${type}`;
+
+        const iconClass =
+          type === "credit" ? "fas fa-arrow-down" : "fas fa-arrow-up";
+        const amountClass =
+          type === "credit" ? "amount-credit" : "amount-debit";
+        const amountPrefix = type === "credit" ? "+" : "-";
+        const iconBg =
+          type === "credit"
+            ? "linear-gradient(45deg, #48bb78, #38a169)"
+            : "linear-gradient(45deg, #f56565, #e53e3e)";
+
+        newTransaction.innerHTML = `
+                <div class="transaction-icon ${type}" style="background: ${iconBg};">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="transaction-details">
+                    <div class="transaction-description">${description}</div>
+                    <div class="transaction-date">Just now</div>
+                    <div class="transaction-reference">TXN-2024-${Math.floor(
+                      Math.random() * 1000000
+                    )}</div>
+                    <div class="transaction-status status-completed">
+                        <i class="fas fa-check-circle"></i> Completed
+                    </div>
+                </div>
+                <div class="transaction-amount ${amountClass}">${amountPrefix}KES ${parseFloat(
+          amount
+        ).toLocaleString()}.00</div>
+            `;
+
+        transactionList.insertBefore(
+          newTransaction,
+          transactionList.firstChild
+        );
+      }
+
+      // Close modal when clicking outside
+      window.onclick = function (event) {
+        const modals = document.querySelectorAll(".modal");
+        modals.forEach((modal) => {
+          if (event.target === modal) {
+            modal.style.display = "none";
+          }
+        });
+      };
+
+      // Animate elements on load
+      document.addEventListener("DOMContentLoaded", function () {
+        const cards = document.querySelectorAll(".action-card, .stat-card");
+        cards.forEach((card, index) => {
+          card.style.opacity = "0";
+          card.style.transform = "translateY(20px)";
+          setTimeout(() => {
+            card.style.transition = "all 0.6s ease";
+            card.style.opacity = "1";
+            card.style.transform = "translateY(0)";
+          }, index * 100);
+        });
+
+        const transactions = document.querySelectorAll(".transaction-item");
+        transactions.forEach((transaction, index) => {
+          transaction.style.opacity = "0";
+          transaction.style.transform = "translateX(-20px)";
+          setTimeout(() => {
+            transaction.style.transition = "all 0.6s ease";
+            transaction.style.opacity = "1";
+            transaction.style.transform = "translateX(0)";
+          }, 500 + index * 100);
+        });
+      });
+    </script>
+  </body>
+</html>
