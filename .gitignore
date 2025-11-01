@@ -52,6 +52,8 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+performance_test_results_*.json
+simulation_results_*.json
 
 # Translations
 *.mo
@@ -147,6 +149,7 @@ logs/
 # Database
 *.db
 *.sqlite
+instance/*.db
 
 # Redis
 dump.rdb

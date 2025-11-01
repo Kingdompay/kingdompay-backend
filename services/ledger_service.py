@@ -4,9 +4,16 @@ Handles transaction ledger operations
 """
 
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional, Dict, Any
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import load_only
+from flask import current_app
 from extensions import db
 from models.transaction import Transaction
 from models.wallet import Wallet
+from models.ledger_journal import LedgerJournal
+from models.ledger_entry import LedgerEntry
 
 
 class LedgerService:
@@ -84,8 +91,11 @@ class LedgerService:
                 return False
 
             # Validate amount
-            amount = float(transaction_data["amount"])
-            if amount <= 0:
+            try:
+                amount_decimal = Decimal(str(transaction_data["amount"]))
+                if amount_decimal <= 0:
+                    return False
+            except (ValueError, TypeError):
                 return False
 
             # Validate wallet IDs exist
@@ -115,7 +125,7 @@ class LedgerService:
             return {
                 "status": "success",
                 "wallet_id": wallet.id,
-                "balance": float(wallet.balance),
+                "balance": str(wallet.balance),
                 "currency": wallet.currency,
             }
         except Exception as e:
@@ -168,3 +178,108 @@ class LedgerService:
                 "status": "failed",
                 "message": f"Failed to update transaction status: {str(e)}",
             }
+
+    # New double-entry transfer with idempotency
+    def _find_journal_by_idem(self, idempotency_key: str) -> Optional[LedgerJournal]:
+        return LedgerJournal.query.filter_by(idempotency_key=idempotency_key).first()
+
+    def post_transfer(
+        self,
+        *,
+        from_wallet_id: int,
+        to_wallet_id: int,
+        amount: Decimal,
+        currency: str,
+        memo: Optional[str],
+        idempotency_key: str,
+        external_ref: Optional[str] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        if from_wallet_id == to_wallet_id:
+            return {"success": False, "message": "Cannot transfer to the same wallet"}
+
+        try:
+            amt = Decimal(str(amount))
+        except Exception:
+            return {"success": False, "message": "Invalid amount"}
+        if amt <= 0:
+            return {"success": False, "message": "Amount must be greater than zero"}
+
+        # Idempotency check
+        existing = self._find_journal_by_idem(idempotency_key)
+        if existing:
+            return {"success": True, "status": "idempotent", "journal_id": existing.id}
+
+        try:
+            with db.session.begin():
+                # Lock wallets (best effort on SQLite)
+                source: Wallet = (
+                    db.session.query(Wallet)
+                    .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
+                    .with_for_update()
+                    .filter(Wallet.id == from_wallet_id)
+                    .first()
+                )
+                dest: Wallet = (
+                    db.session.query(Wallet)
+                    .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
+                    .with_for_update()
+                    .filter(Wallet.id == to_wallet_id)
+                    .first()
+                )
+
+                if not source or not dest:
+                    return {"success": False, "message": "Wallet not found"}
+                if source.currency != currency or dest.currency != currency:
+                    return {"success": False, "message": "Currency mismatch"}
+                if Decimal(source.balance) < amt:
+                    return {"success": False, "message": "Insufficient funds"}
+
+                journal = LedgerJournal(
+                    external_ref=external_ref,
+                    idempotency_key=idempotency_key,
+                    description=memo,
+                )
+                db.session.add(journal)
+                db.session.flush()
+
+                debit_entry = LedgerEntry(
+                    journal_id=journal.id,
+                    wallet_id=to_wallet_id,
+                    account_code="WALLET_CASH",
+                    debit=amt,
+                    credit=Decimal("0.00"),
+                    currency=currency,
+                    meta=meta or {},
+                )
+                credit_entry = LedgerEntry(
+                    journal_id=journal.id,
+                    wallet_id=from_wallet_id,
+                    account_code="WALLET_CASH",
+                    debit=Decimal("0.00"),
+                    credit=amt,
+                    currency=currency,
+                    meta=meta or {},
+                )
+                db.session.add_all([debit_entry, credit_entry])
+
+                # Temporary denormalized wallet balance updates
+                source.balance = Decimal(source.balance) - amt
+                dest.balance = Decimal(dest.balance) + amt
+                db.session.add_all([source, dest])
+
+            return {"success": True, "status": "posted", "journal_id": journal.id}
+        except IntegrityError:
+            db.session.rollback()
+            existing = self._find_journal_by_idem(idempotency_key)
+            if existing:
+                return {
+                    "success": True,
+                    "status": "idempotent",
+                    "journal_id": existing.id,
+                }
+            return {"success": False, "message": "Idempotency conflict"}
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Failed to post transfer")
+            return {"success": False, "message": "Transfer failed"}

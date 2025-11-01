@@ -1,0 +1,36 @@
+[Unit]
+Description=KingdomPay API Service
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=exec
+User=kingdompay
+Group=kingdompay
+WorkingDirectory=/opt/kingdompay
+Environment=PATH=/opt/kingdompay/venv/bin
+Environment=FLASK_ENV=production
+EnvironmentFile=/opt/kingdompay/.env.production
+ExecStart=/opt/kingdompay/venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload app:create_app()
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+Restart=always
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/kingdompay/logs /opt/kingdompay/uploads
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

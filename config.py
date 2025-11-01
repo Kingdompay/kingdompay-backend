@@ -34,22 +34,55 @@ class Config:
             "postgres://", "postgresql://", 1
         )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-        "pool_size": 10,
-        "max_overflow": 20,
-    }
+
+    # Database engine options - different for SQLite vs PostgreSQL
+    if SQLALCHEMY_DATABASE_URI and SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
+        # Special-case in-memory SQLite which uses StaticPool and does not support pool params
+        if SQLALCHEMY_DATABASE_URI.endswith(":memory:"):
+            SQLALCHEMY_ENGINE_OPTIONS = {
+                "connect_args": {
+                    "timeout": 30,
+                    "check_same_thread": False,
+                },
+            }
+        else:
+            SQLALCHEMY_ENGINE_OPTIONS = {
+                "pool_pre_ping": True,
+                "pool_size": 20,
+                "max_overflow": 30,
+                "pool_timeout": 30,
+                "pool_recycle": 3600,
+                "connect_args": {
+                    "timeout": 30,
+                    "check_same_thread": False,
+                },
+            }
+    else:
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "pool_pre_ping": True,
+            "pool_recycle": 300,
+            "pool_size": 20,
+            "max_overflow": 30,
+            "pool_timeout": 30,
+            "connect_args": {
+                "connect_timeout": 30,
+                "application_name": "kingdompay",
+            },
+        }
 
     # Redis Configuration
     REDIS_URL = os.environ.get("REDIS_URL")
 
     # Security Configuration
     ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
+    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_CONTENT_LENGTH", 16777216))  # 16MB
 
     # Rate Limiting
     RATELIMIT_STORAGE_URL = os.environ.get("RATELIMIT_STORAGE_URL")
     RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "1000 per hour")
+    RATELIMIT_OTP_SEND = os.environ.get("RATELIMIT_OTP_SEND", "5 per minute")
+    RATELIMIT_AUTH_ATTEMPTS = os.environ.get("RATELIMIT_AUTH_ATTEMPTS", "10 per minute")
+    RATELIMIT_API_CALLS = os.environ.get("RATELIMIT_API_CALLS", "1000 per hour")
 
     # External Services
     SMS_PROVIDER_API_KEY = os.environ.get("SMS_PROVIDER_API_KEY")
@@ -71,6 +104,15 @@ class Config:
     # Monitoring
     PROMETHEUS_PORT = int(os.environ.get("PROMETHEUS_PORT", 9090))
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+
+    # External Service Timeouts
+    SMS_TIMEOUT = int(os.environ.get("SMS_TIMEOUT", 30))
+    EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", 30))
+    DATABASE_TIMEOUT = int(os.environ.get("DATABASE_TIMEOUT", 30))
+
+    # Health Check Settings
+    HEALTH_CHECK_TIMEOUT = int(os.environ.get("HEALTH_CHECK_TIMEOUT", 5))
+    HEALTH_CHECK_RETRIES = int(os.environ.get("HEALTH_CHECK_RETRIES", 3))
 
     # Feature Flags
     ENABLE_KYC_TIER_1 = os.environ.get("ENABLE_KYC_TIER_1", "true").lower() == "true"

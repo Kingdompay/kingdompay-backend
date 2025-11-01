@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KingdomPay - Communities</title>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+
+      .header {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 30px;
+        margin-bottom: 30px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .header h1 {
+        color: #2d3748;
+        font-size: 2.5rem;
+        margin-bottom: 10px;
+        font-weight: 800;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .nav-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
+      .nav-link {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 15px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .nav-link:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .nav-link i {
+        margin-right: 8px;
+        font-size: 1.1rem;
+      }
+
+      .communities-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+        gap: 30px;
+        margin-bottom: 30px;
+      }
+
+      .community-card {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 25px;
+        padding: 30px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        transition: all 0.3s ease;
+      }
+
+      .community-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 35px 70px rgba(0, 0, 0, 0.15);
+      }
+
+      .community-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      .community-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 15px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 20px;
+        font-size: 1.8rem;
+        color: white;
+      }
+
+      .community-info h3 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 5px;
+      }
+
+      .community-info p {
+        color: #718096;
+        font-size: 0.95rem;
+      }
+
+      .community-stats {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        margin: 20px 0;
+      }
+
+      .stat {
+        background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+        padding: 15px;
+        border-radius: 12px;
+        text-align: center;
+      }
+
+      .stat-number {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #2d3748;
+      }
+
+      .stat-label {
+        font-size: 0.9rem;
+        color: #718096;
+        margin-top: 5px;
+      }
+
+      .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+        margin: 5px;
+      }
+
+      .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        background: white;
+        margin: 5% auto;
+        padding: 30px;
+        border-radius: 25px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        color: #4a5568;
+        font-weight: 600;
+      }
+
+      .form-group input,
+      .form-group select {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        font-size: 1rem;
+      }
+
+      @media (max-width: 768px) {
+        .communities-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1><i class="fas fa-users"></i> My Communities</h1>
+        <p>Manage your community memberships and contributions</p>
+      </div>
+
+      <div class="nav-menu">
+        <a href="/static/index.html" class="nav-link">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/static/wallet.html" class="nav-link">
+          <i class="fas fa-wallet"></i> Wallet
+        </a>
+        <a href="/static/campaigns.html" class="nav-link">
+          <i class="fas fa-bullhorn"></i> Campaigns
+        </a>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 30px">
+        <button class="btn btn-primary" onclick="openCreateModal()">
+          <i class="fas fa-plus"></i> Create Community
+        </button>
+      </div>
+
+      <div class="communities-grid" id="communitiesGrid">
+        <!-- Communities will be loaded here -->
+        <div style="text-align: center; padding: 40px; color: #718096">
+          <i class="fas fa-spinner fa-spin" style="font-size: 3rem"></i>
+          <p style="margin-top: 20px">Loading communities...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create Community Modal -->
+    <div id="createModal" class="modal">
+      <div class="modal-content">
+        <h2 style="margin-bottom: 20px">Create New Community</h2>
+        <div class="form-group">
+          <label>Community Name</label>
+          <input type="text" id="communityName" placeholder="e.g., My Church" />
+        </div>
+        <div class="form-group">
+          <label>Type</label>
+          <select id="communityType">
+            <option value="CHURCH">Church</option>
+            <option value="SACCO">SACCO</option>
+            <option value="NGO">NGO</option>
+            <option value="CLAN">Clan</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <button
+          class="btn btn-primary"
+          onclick="createCommunity()"
+          style="width: 100%"
+        >
+          <i class="fas fa-check"></i> Create Community
+        </button>
+        <button
+          class="btn"
+          onclick="closeModal()"
+          style="background: #e2e8f0; width: 100%; margin-top: 10px"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <script src="/static/api-client.js"></script>
+    <script>
+      async function loadCommunities() {
+        // Check if user is authenticated
+        if (!isAuthenticated()) {
+          const grid = document.getElementById("communitiesGrid");
+          grid.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #718096;">
+              <i class="fas fa-lock" style="font-size: 3rem;"></i>
+              <p style="margin-top: 20px;">Please log in to view your communities</p>
+              <a href="/static/auth.html" class="btn btn-primary" style="margin-top: 20px; display: inline-block;">
+                <i class="fas fa-sign-in-alt"></i> Go to Login
+              </a>
+            </div>
+          `;
+          return;
+        }
+
+        try {
+          const communities = await CommunityAPI.list();
+          const grid = document.getElementById("communitiesGrid");
+
+          if (communities.length === 0) {
+            grid.innerHTML = `
+              <div style="text-align: center; padding: 40px; color: #718096;">
+                <i class="fas fa-users" style="font-size: 3rem;"></i>
+                <p style="margin-top: 20px;">No communities yet. Create one to get started!</p>
+              </div>
+            `;
+            return;
+          }
+
+          grid.innerHTML = communities
+            .map(
+              (community) => `
+            <div class="community-card">
+              <div class="community-header">
+                <div class="community-icon" style="background: linear-gradient(45deg, #ff6b6b, #ee5a6f);">
+                  <i class="fas fa-users"></i>
+                </div>
+                <div class="community-info">
+                  <h3>${community.name}</h3>
+                  <p>${community.type}</p>
+                </div>
+              </div>
+              <div class="community-stats">
+                <div class="stat">
+                  <div class="stat-number">KES 0</div>
+                  <div class="stat-label">Contributions</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-number">-</div>
+                  <div class="stat-label">Members</div>
+                </div>
+              </div>
+              <div style="margin-top: 20px;">
+                <a href="/static/community-detail.html?id=${community.id}" class="btn btn-primary">
+                  <i class="fas fa-eye"></i> View Details
+                </a>
+                <a href="/static/campaigns.html?community=${community.id}" class="btn btn-primary">
+                  <i class="fas fa-bullhorn"></i> Campaigns
+                </a>
+              </div>
+            </div>
+          `
+            )
+            .join("");
+        } catch (error) {
+          console.error("Failed to load communities:", error);
+        }
+      }
+
+      function openCreateModal() {
+        if (!isAuthenticated()) {
+          showError("Please log in to create a community");
+          window.location.href = "/static/auth.html";
+          return;
+        }
+        document.getElementById("createModal").style.display = "block";
+      }
+
+      function closeModal() {
+        document.getElementById("createModal").style.display = "none";
+      }
+
+      async function createCommunity() {
+        if (!isAuthenticated()) {
+          showError("Please log in to create a community");
+          closeModal();
+          return;
+        }
+
+        const name = document.getElementById("communityName").value;
+        const type = document.getElementById("communityType").value;
+
+        if (!name) {
+          showError("Please enter a community name");
+          return;
+        }
+
+        try {
+          const response = await CommunityAPI.create({ name, type });
+          showSuccess("Community created successfully!");
+          closeModal();
+          loadCommunities();
+        } catch (error) {
+          showError("Failed to create community: " + error.message);
+        }
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        loadCommunities();
+      });
+    </script>
+  </body>
+</html>

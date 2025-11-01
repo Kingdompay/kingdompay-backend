@@ -4,13 +4,16 @@ Wallet routes for KingdomPay API v1
 
 from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from services.security_service import require_csrf
 from datetime import datetime, timezone
 from api.v1 import api_v1_bp
 from services.auth_service import AuthService
+from services.ledger_service import LedgerService
 from models.wallet import Wallet
 from models.transaction import Transaction
 
 auth_service = AuthService()
+ledger_service = LedgerService()
 
 
 @api_v1_bp.route("/wallets/balance", methods=["GET"])
@@ -93,12 +96,73 @@ def get_wallet_transactions():
 @api_v1_bp.route("/wallets/ledger", methods=["GET"])
 @jwt_required()
 def get_wallet_ledger():
-    """Get wallet ledger (same as transactions for now)"""
+    """Get wallet ledger backed by transactions for now (cursor pagination placeholder)"""
+    # Reuse current pagination params
     return get_wallet_transactions()
+
+
+@api_v1_bp.route("/transfers", methods=["POST"])
+@jwt_required()
+def create_transfer():
+    """Create wallet-to-wallet transfer with Idempotency-Key"""
+    try:
+        data = request.get_json() or {}
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        idem_key = request.headers.get("Idempotency-Key")
+        if not idem_key:
+            return (
+                jsonify(
+                    {"success": False, "message": "Idempotency-Key header required"}
+                ),
+                400,
+            )
+
+        from_wallet = Wallet.find_by_user_id(user.id)
+        if not from_wallet:
+            return jsonify({"success": False, "message": "Wallet not found"}), 404
+
+        to_wallet_id = data.get("to_wallet") or data.get("to_wallet_id")
+        amount = data.get("amount")
+        currency = data.get("currency") or from_wallet.currency
+        memo = data.get("memo")
+
+        if not to_wallet_id or amount is None:
+            return (
+                jsonify(
+                    {"success": False, "message": "to_wallet and amount are required"}
+                ),
+                400,
+            )
+
+        result = ledger_service.post_transfer(
+            from_wallet_id=from_wallet.id,
+            to_wallet_id=int(to_wallet_id),
+            amount=amount,
+            currency=currency,
+            memo=memo,
+            idempotency_key=idem_key,
+        )
+
+        status_code = 200 if result.get("success") else 400
+        return jsonify(result), status_code
+    except Exception:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "An error occurred while processing your request",
+                }
+            ),
+            500,
+        )
 
 
 @api_v1_bp.route("/wallets/transfer", methods=["POST"])
 @jwt_required()
+@require_csrf
 def transfer_funds():
     """Transfer funds between wallets"""
     try:
@@ -113,7 +177,7 @@ def transfer_funds():
                 404,
             )
 
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"success": False, "message": "No data provided"}), 400
 
@@ -127,16 +191,22 @@ def transfer_funds():
                 )
 
         destination_wallet_number = data["destination_wallet_number"]
-        amount = float(data["amount"])
+        amount = data["amount"]
         description = data["description"]
 
         # Convert amount to Decimal for consistent arithmetic
         from decimal import Decimal
 
-        amount_decimal = Decimal(str(amount))
+        try:
+            amount_decimal = Decimal(str(amount))
+        except (ValueError, TypeError):
+            return (
+                jsonify({"success": False, "message": "Invalid amount format"}),
+                400,
+            )
 
         # Validate amount
-        if amount <= 0:
+        if amount_decimal <= 0:
             return (
                 jsonify({"success": False, "message": "Amount must be greater than 0"}),
                 400,
@@ -218,6 +288,7 @@ def transfer_funds():
 
 @api_v1_bp.route("/wallets/deposit", methods=["POST"])
 @jwt_required()
+@require_csrf
 def deposit_funds():
     """Add funds to wallet (admin/system operation)"""
     try:
@@ -229,7 +300,7 @@ def deposit_funds():
         if not wallet:
             return jsonify({"success": False, "message": "Wallet not found"}), 404
 
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             return jsonify({"success": False, "message": "No data provided"}), 400
 
@@ -237,18 +308,29 @@ def deposit_funds():
         if "amount" not in data:
             return jsonify({"success": False, "message": "amount is required"}), 400
 
-        amount = float(data["amount"])
+        amount = data["amount"]
         description = data.get("description", "Deposit")
 
+        # Convert amount to Decimal for consistent arithmetic
+        from decimal import Decimal
+
+        try:
+            amount_decimal = Decimal(str(amount))
+        except (ValueError, TypeError):
+            return (
+                jsonify({"success": False, "message": "Invalid amount format"}),
+                400,
+            )
+
         # Validate amount
-        if amount <= 0:
+        if amount_decimal <= 0:
             return (
                 jsonify({"success": False, "message": "Amount must be greater than 0"}),
                 400,
             )
 
         # Add funds using wallet method
-        transaction = wallet.add_funds(amount, description)
+        transaction = wallet.add_funds(amount_decimal, description)
 
         return (
             jsonify(
@@ -278,6 +360,7 @@ def deposit_funds():
 
 @api_v1_bp.route("/wallets/withdraw", methods=["POST"])
 @jwt_required()
+@require_csrf
 def withdraw_funds():
     """Remove funds from wallet"""
     try:
@@ -297,22 +380,33 @@ def withdraw_funds():
         if "amount" not in data:
             return jsonify({"success": False, "message": "amount is required"}), 400
 
-        amount = float(data["amount"])
+        amount = data["amount"]
         description = data.get("description", "Withdrawal")
 
+        # Convert amount to Decimal for consistent arithmetic
+        from decimal import Decimal
+
+        try:
+            amount_decimal = Decimal(str(amount))
+        except (ValueError, TypeError):
+            return (
+                jsonify({"success": False, "message": "Invalid amount format"}),
+                400,
+            )
+
         # Validate amount
-        if amount <= 0:
+        if amount_decimal <= 0:
             return (
                 jsonify({"success": False, "message": "Amount must be greater than 0"}),
                 400,
             )
 
         # Check if wallet has sufficient balance
-        if not wallet.can_afford(amount):
+        if not wallet.can_afford(amount_decimal):
             return jsonify({"success": False, "message": "Insufficient funds"}), 400
 
         # Deduct funds using wallet method
-        transaction = wallet.deduct_funds(amount, description)
+        transaction = wallet.deduct_funds(amount_decimal, description)
 
         return (
             jsonify(

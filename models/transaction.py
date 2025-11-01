@@ -31,7 +31,16 @@ class Transaction(db.Model):
     )
     status = db.Column(db.String(20), default="SUCCESS")
     description = db.Column(db.Text)
+    # Link to contribution if this transaction is related to a community contribution
+    contribution_id = db.Column(
+        db.Integer,
+        db.ForeignKey("contributions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at = db.Column(db.DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    contribution = db.relationship("Contribution", backref="transactions")
 
     def __repr__(self):
         return f"<Transaction {self.reference_number}>"
@@ -43,18 +52,22 @@ class Transaction(db.Model):
             "source_wallet_id": self.source_wallet_id,
             "destination_wallet_id": self.destination_wallet_id,
             "transaction_type": self.transaction_type,
-            "amount": float(self.amount),
+            # Expose numeric values for client/tests while keeping DB precision
+            "amount": float(self.amount) if self.amount is not None else 0.0,
             "source_balance_after": (
-                float(self.source_balance_after) if self.source_balance_after else None
+                float(self.source_balance_after)
+                if self.source_balance_after is not None
+                else None
             ),
             "destination_balance_after": (
                 float(self.destination_balance_after)
-                if self.destination_balance_after
+                if self.destination_balance_after is not None
                 else None
             ),
             "reference_number": self.reference_number,
             "status": self.status,
             "description": self.description,
+            "contribution_id": self.contribution_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

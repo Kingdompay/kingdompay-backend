@@ -7,4 +7,12 @@ from flask import Blueprint
 api_v1_bp = Blueprint("api_v1", __name__)
 
 # Import all route modules
-from . import auth_routes, wallet_routes, kyc_routes
+from . import (
+    auth_routes,
+    wallet_routes,
+    kyc_routes,
+    communities_routes,
+    campaigns_routes,
+    reports_routes,
+    webhooks_routes,
+)

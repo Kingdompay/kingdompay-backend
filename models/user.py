@@ -32,6 +32,12 @@ class User(db.Model):
     wallet = db.relationship(
         "Wallet", backref="user", uselist=False, cascade="all, delete-orphan"
     )
+    community_memberships = db.relationship(
+        "CommunityMember", back_populates="user", cascade="all, delete-orphan"
+    )
+    contributions = db.relationship(
+        "Contribution", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<User {self.phone_number}>"

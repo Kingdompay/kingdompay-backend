@@ -1,0 +1,58 @@
+# VCS
+.git
+.gitignore
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+
+# Coverage / test artifacts
+htmlcov/
+.coverage*
+coverage.xml
+nosetests.xml
+performance_test_results_*.json
+simulation_results_*.json
+
+# Local databases and instance data
+*.db
+*.sqlite
+instance/
+
+# Logs and temp files
+logs/
+*.log
+.tmp/
+/tmp/
+
+# Build outputs
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# Uploads (user-generated)
+uploads/
+uploads/kyc/
+
+# Editor/IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Optional: exclude tests from production image to shrink size
+/tests/
