@@ -14,7 +14,7 @@ marshmallow-sqlalchemy==0.29.0
 cryptography==41.0.7
 pyotp==2.9.0
 qrcode==7.4.2
-Pillow==10.0.1
+Pillow==10.2.0
 boto3==1.28.62
 pydantic==2.4.2
 pydantic-settings==2.0.3
