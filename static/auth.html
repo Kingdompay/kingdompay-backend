@@ -470,6 +470,10 @@
           <p class="auth-subtitle">
             Complete the verification process to access your account
           </p>
+          <div class="status-message status-info" style="margin-top: 15px">
+            <i class="fas fa-info-circle"></i> <strong>Demo Mode:</strong> OTP
+            verification is a placeholder. Any 6-digit code will work.
+          </div>
         </div>
 
         <!-- Progress Bar -->
@@ -618,6 +622,7 @@
       </div>
     </div>
 
+    <script src="/static/api-client.js"></script>
     <script>
       let currentStep = 1;
       const totalSteps = 3;
@@ -627,59 +632,129 @@
         document.getElementById("progress").style.width = progress + "%";
       }
 
-      function requestOTP() {
+      async function requestOTP() {
         const phone = document.getElementById("phone").value;
 
         if (!phone) {
-          alert("Please enter your phone number");
+          showError("Please enter your phone number");
           return;
         }
 
-        // Show OTP in demo
-        document.getElementById("otp-display").style.display = "block";
-        document.getElementById("otp-status").style.display = "block";
+        try {
+          // Show loading
+          document.getElementById("otp-status").style.display = "block";
+          document.getElementById("otp-status").innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Sending OTP...';
 
-        // Move to next step
-        setTimeout(() => {
-          document.getElementById("step1").classList.remove("active");
-          document.getElementById("step1").classList.add("completed");
-          document.getElementById("step2").classList.add("active");
-          currentStep = 2;
-          updateProgress();
+          const response = await AuthAPI.requestOTP(phone);
 
-          // Scroll to step
-          document
-            .getElementById("step2")
-            .scrollIntoView({ behavior: "smooth" });
-        }, 1500);
+          // Show success
+          document.getElementById("otp-display").style.display = "block";
+          document.getElementById("otp-status").innerHTML =
+            '<i class="fas fa-check-circle"></i> Verification code sent successfully!';
+          document.getElementById("otp-status").classList.add("status-success");
+
+          // Move to next step after 2 seconds
+          setTimeout(() => {
+            document.getElementById("step1").classList.remove("active");
+            document.getElementById("step1").classList.add("completed");
+            document.getElementById("step2").classList.add("active");
+            currentStep = 2;
+            updateProgress();
+
+            // Scroll to step
+            document
+              .getElementById("step2")
+              .scrollIntoView({ behavior: "smooth" });
+          }, 2000);
+        } catch (error) {
+          showError(
+            "Failed to send OTP: " + (error.message || "Unknown error")
+          );
+        }
       }
 
-      function verifyOTP() {
+      async function verifyOTP() {
+        const phone = document.getElementById("phone").value;
         const otp = document.getElementById("otp").value;
         const fullname = document.getElementById("fullname").value;
         const email = document.getElementById("email").value;
 
         if (!otp || !fullname) {
-          alert("Please fill in all required fields");
+          showError("Please fill in all required fields");
           return;
         }
 
-        if (otp === "123456") {
-          // Show success
-          document.getElementById("step2").classList.remove("active");
-          document.getElementById("step2").classList.add("completed");
-          document.getElementById("step3").classList.add("active");
-          document.getElementById("user-info").style.display = "block";
-          document.getElementById("tokens").style.display = "block";
-          currentStep = 3;
-          updateProgress();
+        try {
+          // Show loading
+          const button = document.querySelector("#step2 button");
+          if (button) {
+            button.disabled = true;
+            button.innerHTML =
+              '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+          }
 
-          // Scroll to step
-          document
-            .getElementById("step3")
-            .scrollIntoView({ behavior: "smooth" });
-        } else {
-          alert("Invalid verification code. Please try again.");
+          // DEMO MODE: OTP verification is placeholder - any code works
+          // In production, this would call AuthAPI.verifyOTP(phone, otp, fullname)
+          const response = {
+            success: true,
+            message: "OTP verified successfully (Demo Mode)",
+            user: {
+              id: 1,
+              full_name: fullname,
+              phone_number: phone,
+              email: email,
+              is_phone_verified: true,
+              wallet_number: "WAL-123456789",
+            },
+            access_token:
+              "demo_access_token_placeholder_" +
+              Math.random().toString(36).substring(7),
+            refresh_token:
+              "demo_refresh_token_placeholder_" +
+              Math.random().toString(36).substring(7),
+          };
+
+          if (response.success) {
+            // Update user info display
+            const userInfo = response.user;
+            document.querySelector("#user-info p strong").textContent = "Name:";
+            document.querySelectorAll(
+              "#user-info p"
+            )[0].innerHTML = `<strong>Name:</strong> ${userInfo.full_name}`;
+            document.querySelectorAll(
+              "#user-info p"
+            )[1].innerHTML = `<strong>Phone:</strong> ${userInfo.phone_number}`;
+            document.querySelectorAll(
+              "#user-info p"
+            )[2].innerHTML = `<strong>Email:</strong> ${
+              email || "Not provided"
+            }`;
+
+            // Show success
+            document.getElementById("step2").classList.remove("active");
+            document.getElementById("step2").classList.add("completed");
+            document.getElementById("step3").classList.add("active");
+            document.getElementById("user-info").style.display = "block";
+            document.getElementById("tokens").style.display = "block";
+            currentStep = 3;
+            updateProgress();
+
+            // Scroll to step
+            document
+              .getElementById("step3")
+              .scrollIntoView({ behavior: "smooth" });
+          }
+        } catch (error) {
+          showError("Invalid verification code. Please try again.");
+        } finally {
+          // Re-enable button
+          const button = document.querySelector("#step2 button");
+          if (button) {
+            button.disabled = false;
+            button.innerHTML =
+              '<i class="fas fa-check"></i> Verify & Create Account';
+          }
         }
       }
 
@@ -765,7 +840,7 @@
       }
 
       function continueToWallet() {
-        window.location.href = "/static/wallet.html";
+        window.location.href = "/wallet-demo";
       }
 
       // Initialize

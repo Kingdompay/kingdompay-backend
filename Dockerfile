@@ -5,7 +5,8 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FLASK_APP=app.py \
-    FLASK_ENV=production
+    FLASK_ENV=production \
+    PORT=5000
 
 # Set work directory
 WORKDIR /app
@@ -30,15 +31,21 @@ COPY . .
 
 # Create non-root user for security
 RUN groupadd -r appuser && useradd -r -g appuser appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod -R 755 /app
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/uploads/kyc \
+    && chown -R appuser:appuser /app/logs /app/uploads
+
 USER appuser
 
 # Expose port
-EXPOSE 5000
+EXPOSE $PORT
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "app:create_app()"]
+# Run database migrations and start the application
+CMD ["sh", "-c", "python3 -m flask db upgrade && gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload app:app"]

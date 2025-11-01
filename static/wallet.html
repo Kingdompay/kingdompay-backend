@@ -709,7 +709,33 @@
       </div>
     </div>
 
+    <script src="/static/api-client.js"></script>
     <script>
+      // Load wallet data on page load
+      async function loadWalletData() {
+        if (!requireAuth()) return;
+
+        try {
+          const wallet = await WalletAPI.getBalance();
+          document.querySelector(".balance-amount").textContent =
+            formatCurrency(wallet.balance, wallet.currency);
+          document.querySelector(".wallet-number").textContent =
+            wallet.display_number;
+
+          // Load transactions
+          const transactionsResponse = await WalletAPI.getTransactions(1, 3);
+          displayTransactions(transactionsResponse.transactions);
+        } catch (error) {
+          console.error("Failed to load wallet data:", error);
+          // Demo mode: Show placeholder data if API fails
+          if (!getAuthToken() || getAuthToken().startsWith("demo_")) {
+            document.querySelector(".balance-amount").textContent = "KES 0.00";
+            document.querySelector(".wallet-number").textContent =
+              "WAL-000000000";
+          }
+        }
+      }
+
       function openModal(modalId) {
         document.getElementById(modalId).style.display = "block";
       }
@@ -718,32 +744,61 @@
         document.getElementById(modalId).style.display = "none";
       }
 
-      function processTransfer() {
+      async function processTransfer() {
         const recipient = document.getElementById("recipient").value;
         const amount = document.getElementById("amount").value;
         const description = document.getElementById("description").value;
 
-        if (recipient && amount && description) {
-          alert(
-            `Transfer initiated!\nTo: ${recipient}\nAmount: KES ${amount}\nDescription: ${description}`
+        if (!recipient || !amount || !description) {
+          showError("Please fill in all fields");
+          return;
+        }
+
+        try {
+          const response = await WalletAPI.transfer(
+            recipient,
+            parseFloat(amount),
+            description
           );
-          // Simulate API call
-          simulateTransaction("transfer", amount, description);
-        } else {
-          alert("Please fill in all fields");
+
+          showSuccess(
+            `Transfer successful!\nReference: ${response.transaction.reference_number}`
+          );
+
+          // Reload balance and transactions
+          await loadWalletData();
+        } catch (error) {
+          showError("Transfer failed: " + (error.message || "Unknown error"));
         }
       }
 
-      function confirmTransfer() {
+      async function confirmTransfer() {
         const recipient = document.getElementById("modalRecipient").value;
         const amount = document.getElementById("modalAmount").value;
         const description = document.getElementById("modalDescription").value;
 
-        alert(
-          `Transfer confirmed!\nTo: ${recipient}\nAmount: KES ${amount}\nDescription: ${description}`
-        );
-        closeModal("transferModal");
-        simulateTransaction("transfer", amount, description);
+        if (!recipient || !amount || !description) {
+          showError("Please fill in all fields");
+          return;
+        }
+
+        try {
+          const response = await WalletAPI.transfer(
+            recipient,
+            parseFloat(amount),
+            description
+          );
+
+          showSuccess(
+            `Transfer confirmed!\nReference: ${response.transaction.reference_number}`
+          );
+          closeModal("transferModal");
+
+          // Reload balance
+          await loadWalletData();
+        } catch (error) {
+          showError("Transfer failed: " + (error.message || "Unknown error"));
+        }
       }
 
       function confirmDeposit() {
@@ -814,8 +869,56 @@
       }
 
       function showFullHistory() {
-        alert("Loading complete transaction history...");
+        window.location.href = "/static/transactions.html";
       }
+
+      // Display transactions function
+      function displayTransactions(transactions) {
+        const container = document.querySelector(
+          ".card .transaction-item"
+        )?.parentElement;
+        if (!container) return;
+
+        // Clear existing transactions
+        container.innerHTML = "";
+
+        transactions.forEach((tx) => {
+          const isCredit =
+            tx.transaction_type === "DEPOSIT" ||
+            (tx.transaction_type === "TRANSFER" &&
+              tx.destination_balance_after);
+          const txElement = document.createElement("div");
+          txElement.className = `transaction-item ${isCredit ? "" : "debit"}`;
+
+          const iconBg = isCredit
+            ? "linear-gradient(45deg, #48bb78, #38a169)"
+            : "linear-gradient(45deg, #f56565, #e53e3e)";
+
+          txElement.innerHTML = `
+            <div class="transaction-icon-small" style="background: ${iconBg};">
+              <i class="fas fa-${isCredit ? "arrow-down" : "arrow-up"}"></i>
+            </div>
+            <div class="transaction-details">
+              <div class="transaction-description">${
+                tx.description || tx.transaction_type
+              }</div>
+              <div class="transaction-date">${formatDate(tx.created_at)}</div>
+            </div>
+            <div class="transaction-amount ${
+              isCredit ? "amount-credit" : "amount-debit"
+            }">
+              ${isCredit ? "+" : "-"}${formatCurrency(Math.abs(tx.amount))}
+            </div>
+          `;
+
+          container.appendChild(txElement);
+        });
+      }
+
+      // Initialize on page load
+      document.addEventListener("DOMContentLoaded", function () {
+        loadWalletData();
+      });
 
       // Close modal when clicking outside
       window.onclick = function (event) {

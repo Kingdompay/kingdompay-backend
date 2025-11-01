@@ -59,7 +59,8 @@ class Wallet(db.Model):
             "user_id": self.user_id,
             "wallet_number": self.wallet_number,
             "display_number": self.display_number,
-            "balance": float(self.balance),
+            # Expose numeric balance for API consumers/tests; internal storage remains Decimal
+            "balance": float(self.balance) if self.balance is not None else 0.0,
             "currency": self.currency,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -67,7 +68,8 @@ class Wallet(db.Model):
 
     def can_afford(self, amount):
         """Check if wallet has sufficient balance"""
-        return float(self.balance) >= float(amount)
+        amount_decimal = Decimal(str(amount))
+        return self.balance >= amount_decimal
 
     def add_funds(self, amount, description="Deposit"):
         """Add funds to wallet"""

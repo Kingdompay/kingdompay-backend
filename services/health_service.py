@@ -8,6 +8,7 @@ import psutil
 from typing import Dict, Any, List
 from flask import current_app
 from sqlalchemy import text
+from extensions import db
 import logging
 
 logger = logging.getLogger(__name__)
@@ -57,25 +58,23 @@ class HealthService:
             start_time = time.time()
 
             # Test basic connectivity
-            result = current_app.db.session.execute(text("SELECT 1")).fetchone()
+            result = db.session.execute(text("SELECT 1")).fetchone()
 
             # Test query performance
             query_time = time.time() - start_time
 
             # Get database info
-            db_info = current_app.db.session.execute(
-                text("SELECT version()")
-            ).fetchone()
+            db_info = db.session.execute(text("SELECT version()")).fetchone()
 
             return {
                 "status": "healthy",
                 "response_time_ms": round(query_time * 1000, 2),
                 "version": db_info[0] if db_info else "unknown",
                 "connection_pool": {
-                    "size": current_app.db.engine.pool.size(),
-                    "checked_in": current_app.db.engine.pool.checkedin(),
-                    "checked_out": current_app.db.engine.pool.checkedout(),
-                    "overflow": current_app.db.engine.pool.overflow(),
+                    "size": db.engine.pool.size(),
+                    "checked_in": db.engine.pool.checkedin(),
+                    "checked_out": db.engine.pool.checkedout(),
+                    "overflow": db.engine.pool.overflow(),
                 },
             }
         except Exception as e:

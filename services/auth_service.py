@@ -52,7 +52,8 @@ class AuthService:
         recent_attempts = OTPVerification.get_recent_attempts(
             validated_phone, minutes=5
         )
-        if recent_attempts >= 3:
+        # Align with route-level limiter (5 per minute): allow first 5 attempts
+        if recent_attempts >= 5:
             return {
                 "success": False,
                 "message": "Too many OTP requests. Please wait 5 minutes.",
@@ -78,7 +79,7 @@ class AuthService:
             }
 
     def verify_otp(self, phone_number, otp_code, full_name=None):
-        """Verify OTP and create/update user"""
+        """Verify OTP and create/update user with proper race condition handling"""
         # Validate phone number
         validated_phone = self.validate_phone_number(phone_number)
         if not validated_phone:
@@ -88,61 +89,125 @@ class AuthService:
         if not OTPVerification.verify_otp(validated_phone, otp_code):
             return {"success": False, "message": "Invalid or expired OTP"}
 
-        # Find or create user
-        user = User.find_by_phone(validated_phone)
-        if not user:
-            if not full_name:
+        # Use database transaction with proper error handling for race conditions
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # Note: We don't need to explicitly begin a transaction
+                # Flask-SQLAlchemy manages this automatically
+
+                # Find or create user with proper locking
+                user = User.find_by_phone(validated_phone)
+                if not user:
+                    if not full_name:
+                        db.session.rollback()
+                        return {
+                            "success": False,
+                            "message": "Full name is required for new users",
+                        }
+
+                    # Create new user with proper error handling
+                    try:
+                        user = User(
+                            full_name=full_name,
+                            phone_number=validated_phone,
+                            is_phone_verified=True,
+                        )
+                        db.session.add(user)
+                        db.session.flush()  # Get user ID
+
+                        # Create wallet for new user
+                        from models.wallet import Wallet
+
+                        wallet = Wallet(user_id=user.id)
+                        db.session.add(wallet)
+                        db.session.commit()
+
+                    except Exception as e:
+                        db.session.rollback()
+                        # Check if it's a unique constraint violation
+                        if (
+                            "UNIQUE constraint failed" in str(e)
+                            or "duplicate key" in str(e).lower()
+                        ):
+                            # User was created by another concurrent request
+                            if attempt < max_retries - 1:
+                                continue  # Retry
+                            else:
+                                # Final attempt - try to find the user that was created
+                                user = User.find_by_phone(validated_phone)
+                                if user:
+                                    # Update existing user
+                                    user.is_phone_verified = True
+                                    if full_name:
+                                        user.full_name = full_name
+                                    db.session.commit()
+                                    break
+                                else:
+                                    return {
+                                        "success": False,
+                                        "message": "Failed to create user account",
+                                    }
+                        else:
+                            return {
+                                "success": False,
+                                "message": "Failed to create user account",
+                            }
+                else:
+                    # Update existing user
+                    user.is_phone_verified = True
+                    if full_name:
+                        user.full_name = full_name
+                    db.session.commit()
+
+                # Generate tokens
+                # Use string identity for JWT to avoid type-related issues in some configurations
+                access_token = create_access_token(identity=str(user.id))
+                refresh_token = create_refresh_token(identity=str(user.id))
+
+                # Update last login
+                user.update_last_login()
+
                 return {
-                    "success": False,
-                    "message": "Full name is required for new users",
+                    "success": True,
+                    "message": "OTP verified successfully",
+                    "user": user.to_dict(),
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
                 }
 
-            # Create new user
-            user = User(
-                full_name=full_name,
-                phone_number=validated_phone,
-                is_phone_verified=True,
-            )
-            db.session.add(user)
-            db.session.flush()  # Get user ID
-
-            # Create wallet for new user
-            from models.wallet import Wallet
-
-            wallet = Wallet(user_id=user.id)
-            db.session.add(wallet)
-            db.session.commit()
-        else:
-            # Update existing user
-            user.is_phone_verified = True
-            if full_name:
-                user.full_name = full_name
-            db.session.commit()
-
-        # Generate tokens
-        access_token = create_access_token(identity=user.id)
-        refresh_token = create_refresh_token(identity=user.id)
-
-        # Update last login
-        user.update_last_login()
+            except Exception as e:
+                db.session.rollback()
+                if attempt < max_retries - 1:
+                    continue  # Retry
+                else:
+                    return {
+                        "success": False,
+                        "message": "Failed to process verification",
+                    }
 
         return {
-            "success": True,
-            "message": "OTP verified successfully",
-            "user": user.to_dict(),
-            "tokens": {"access_token": access_token, "refresh_token": refresh_token},
+            "success": False,
+            "message": "Failed to process verification after multiple attempts",
         }
 
     def refresh_token(self):
         """Refresh access token using the current refresh token context"""
         try:
+            # Identity may be stored as string; cast to int for DB lookup
             user_id = get_jwt_identity()
-            user = User.query.get(user_id)
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                return {"success": False, "message": "Invalid refresh token"}
+
+            user = User.query.get(user_id_int)
 
             if not user or not user.is_active:
                 return {"success": False, "message": "Invalid refresh token"}
 
-            new_access_token = create_access_token(identity=user_id)
+            # Ensure identity is a string for consistency
+            new_access_token = create_access_token(identity=str(user_id))
 
             return {"success": True, "access_token": new_access_token}
         except Exception:
@@ -152,7 +217,12 @@ class AuthService:
         """Get current user from JWT token"""
         try:
             user_id = get_jwt_identity()
-            user = User.query.get(user_id)
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                return None
+
+            user = User.query.get(user_id_int)
 
             if not user or not user.is_active:
                 return None
@@ -172,29 +242,56 @@ class AuthService:
         return {"success": True, "message": "Logged out successfully"}
 
     def update_profile(self, user_id, data):
-        """Update user profile"""
-        user = User.query.get(user_id)
-        if not user:
-            return {"success": False, "message": "User not found"}
+        """Update user profile with proper race condition handling"""
+        try:
+            user_id = int(user_id)
+        except (TypeError, ValueError):
+            return {"success": False, "message": "Invalid user"}
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                user = User.query.get(user_id)
+                if not user:
+                    db.session.rollback()
+                    return {"success": False, "message": "User not found"}
 
-        # Update allowed fields
-        if "full_name" in data:
-            user.full_name = data["full_name"]
+                # Update allowed fields
+                if "full_name" in data:
+                    user.full_name = data["full_name"]
 
-        if "email" in data:
-            # Check if email is already taken
-            existing_user = User.find_by_email(data["email"])
-            if existing_user and existing_user.id != user_id:
-                return {"success": False, "message": "Email already taken"}
-            user.email = data["email"]
+                if "email" in data:
+                    # Check if email is already taken
+                    existing_user = User.find_by_email(data["email"])
+                    if existing_user and existing_user.id != user_id:
+                        db.session.rollback()
+                        return {"success": False, "message": "Email already taken"}
+                    user.email = data["email"]
 
-        user.updated_at = datetime.now(timezone.utc)
-        db.session.commit()
+                user.updated_at = datetime.now(timezone.utc)
+                db.session.commit()
+
+                return {
+                    "success": True,
+                    "message": "Profile updated successfully",
+                    "user": user.to_dict(),
+                }
+
+            except Exception as e:
+                db.session.rollback()
+                if (
+                    "UNIQUE constraint failed" in str(e)
+                    or "duplicate key" in str(e).lower()
+                ):
+                    if attempt < max_retries - 1:
+                        continue  # Retry
+                    else:
+                        return {"success": False, "message": "Email already taken"}
+                else:
+                    return {"success": False, "message": "Failed to update profile"}
 
         return {
-            "success": True,
-            "message": "Profile updated successfully",
-            "user": user.to_dict(),
+            "success": False,
+            "message": "Failed to update profile after multiple attempts",
         }
 
     def cleanup_expired_otps(self):
