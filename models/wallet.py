@@ -18,9 +18,15 @@ class Wallet(db.Model):
     user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True,
-        nullable=False,
+        nullable=True,  # Made nullable for system/community wallets
+        unique=False,  # Remove unique constraint (multiple wallets can have same user_id if different owner_type)
     )
+    owner_type = db.Column(
+        db.String(20), default="USER", nullable=False
+    )  # USER|COMMUNITY|PLATFORM|FEDERAL
+    owner_id = db.Column(
+        db.Integer, nullable=False, default=0
+    )  # user_id, community_id, or 0 for system
     wallet_number = db.Column(
         db.String(36), unique=True, default=lambda: str(uuid.uuid4())
     )
@@ -46,6 +52,19 @@ class Wallet(db.Model):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # Set owner_type and owner_id if not provided (for backward compatibility)
+        if "owner_type" not in kwargs:
+            if self.user_id:
+                self.owner_type = "USER"
+                self.owner_id = self.user_id
+            else:
+                self.owner_type = kwargs.get("owner_type", "USER")
+                self.owner_id = kwargs.get("owner_id", 0)
+        elif not hasattr(self, "owner_id") or self.owner_id is None:
+            if self.user_id and self.owner_type == "USER":
+                self.owner_id = self.user_id
+            else:
+                self.owner_id = kwargs.get("owner_id", 0)
         if not self.display_number:
             self.display_number = f"WAL-{random.randint(100000000, 999999999)}"
 
@@ -57,6 +76,8 @@ class Wallet(db.Model):
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "owner_type": getattr(self, "owner_type", "USER"),
+            "owner_id": getattr(self, "owner_id", self.user_id or 0),
             "wallet_number": self.wallet_number,
             "display_number": self.display_number,
             # Expose numeric balance for API consumers/tests; internal storage remains Decimal

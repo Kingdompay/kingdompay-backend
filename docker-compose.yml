@@ -58,6 +58,7 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ./static:/app/static
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s

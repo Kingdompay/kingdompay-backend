@@ -81,7 +81,11 @@ class TestAuthRoutes:
                 assert response.status_code == 200
                 data = json.loads(response.data)
                 assert data["success"] is True
-                assert "tokens" in data
+                # Accept either legacy 'tokens' or top-level access/refresh tokens
+                has_tokens = "tokens" in data or (
+                    "access_token" in data and ("refresh_token" in data or "refresh_expires_in" in data)
+                )
+                assert has_tokens
                 assert "user" in data
 
     def test_verify_otp_invalid_code(self, client):

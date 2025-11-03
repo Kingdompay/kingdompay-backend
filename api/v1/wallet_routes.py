@@ -6,14 +6,17 @@ from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from services.security_service import require_csrf
 from datetime import datetime, timezone
+from decimal import Decimal
 from api.v1 import api_v1_bp
 from services.auth_service import AuthService
 from services.ledger_service import LedgerService
+from services.transfer_service import TransferService
 from models.wallet import Wallet
 from models.transaction import Transaction
 
 auth_service = AuthService()
 ledger_service = LedgerService()
+transfer_service = TransferService()
 
 
 @api_v1_bp.route("/wallets/balance", methods=["GET"])
@@ -137,13 +140,15 @@ def create_transfer():
                 400,
             )
 
-        result = ledger_service.post_transfer(
+        # Use TransferService for fee-integrated transfers
+        result = transfer_service.process_transfer(
             from_wallet_id=from_wallet.id,
             to_wallet_id=int(to_wallet_id),
-            amount=amount,
+            amount=Decimal(str(amount)),
             currency=currency,
             memo=memo,
             idempotency_key=idem_key,
+            user_id=user.id,
         )
 
         status_code = 200 if result.get("success") else 400

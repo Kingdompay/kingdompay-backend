@@ -165,30 +165,43 @@ def contribute_to_campaign(campaign_id: int):
         if not from_wallet:
             return jsonify({"success": False, "message": "Wallet not found"}), 404
 
-        # For MVP, use the community owner's wallet as community wallet
+        # Get or create community wallet
+        from services.wallet_service import WalletService
+
         community = Community.query.get(campaign.community_id)
-        to_wallet = Wallet.find_by_user_id(community.owner_user_id)
-        if not to_wallet:
+        community_wallet = WalletService.get_or_create_community_wallet(community.id)
+
+        if not community_wallet:
             return (
                 jsonify({"success": False, "message": "Community wallet not found"}),
                 404,
             )
 
-        result = ledger_service.post_transfer(
+        # Use TransferService for fee-integrated campaign contributions
+        from services.transfer_service import TransferService
+        from decimal import Decimal
+
+        transfer_service = TransferService()
+
+        result = transfer_service.process_transfer(
             from_wallet_id=from_wallet.id,
-            to_wallet_id=to_wallet.id,
-            amount=amount,
+            to_wallet_id=community_wallet.id,
+            amount=Decimal(str(amount)),
             currency=currency or from_wallet.currency,
             memo=memo,
             idempotency_key=idem_key,
-            meta={"campaign_id": campaign.id},
+            user_id=user.id,
+            external_ref=f"CAMPAIGN-{campaign.id}",
         )
+
+        # Extract journal_id from result
+        journal_id = result.get("journal_id") if result.get("success") else None
         status_code = 200 if result.get("success") else 400
         # Send basic receipts if available
-        if result.get("success") and result.get("journal_id"):
+        if result.get("success") and journal_id:
             try:
                 receipt = receipt_service.build_receipt(
-                    journal_id=result["journal_id"], campaign=campaign
+                    journal_id=journal_id, campaign=campaign
                 )
                 if user.email:
                     receipt_service.send_email_receipt(

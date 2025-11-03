@@ -52,6 +52,15 @@ def create_app(config_class=Config):
     app.health_service = HealthService()
     app.kyc_service = KYCService()
 
+    # Initialize system wallets on startup
+    with app.app_context():
+        from services.wallet_service import WalletService
+
+        try:
+            WalletService.initialize_system_wallets()
+        except Exception as e:
+            app.logger.warning(f"Could not initialize system wallets: {e}")
+
     # Initialize security middleware
     SecurityMiddleware(app)
 

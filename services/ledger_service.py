@@ -211,7 +211,8 @@ class LedgerService:
             return {"success": True, "status": "idempotent", "journal_id": existing.id}
 
         try:
-            with db.session.begin():
+            # Use a SAVEPOINT to allow calls within an existing transaction (tests / nested flows)
+            with db.session.begin_nested():
                 # Lock wallets (best effort on SQLite)
                 source: Wallet = (
                     db.session.query(Wallet)

@@ -46,9 +46,21 @@ def create_community():
             community_id=community.id, user_id=user.id, role=CommunityRole.ADMIN.value
         )
         db.session.add(member)
+        db.session.flush()
+
+        # Create community wallet
+        from services.wallet_service import WalletService
+
+        community_wallet = WalletService.get_or_create_community_wallet(community.id)
+
         db.session.commit()
 
-        return jsonify({"success": True, "community": community.to_dict()}), 201
+        community_dict = community.to_dict()
+        if community_wallet:
+            community_dict["wallet_id"] = community_wallet.id
+            community_dict["wallet_display_number"] = community_wallet.display_number
+
+        return jsonify({"success": True, "community": community_dict}), 201
     except Exception:
         db.session.rollback()
         return (
