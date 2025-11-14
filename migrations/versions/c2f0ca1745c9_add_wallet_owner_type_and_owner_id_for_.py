@@ -7,6 +7,7 @@ Create Date: 2025-11-02 17:29:44.960705
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -14,6 +15,25 @@ revision = 'c2f0ca1745c9'
 down_revision = 'be199617c00b'
 branch_labels = None
 depends_on = None
+
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table"""
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    columns = [col['name'] for col in inspector.get_columns(table_name)]
+    return column_name in columns
+
+
+def constraint_exists(table_name, constraint_name):
+    """Check if a constraint exists on a table"""
+    bind = op.get_bind()
+    # Use parameterized query with proper escaping
+    query = sa.text(
+        f"SELECT conname FROM pg_constraint WHERE conrelid = '{table_name}'::regclass AND conname = :constraint_name"
+    )
+    result = bind.execute(query.bindparams(sa.bindparam('constraint_name', constraint_name)))
+    return result.fetchone() is not None
 
 
 def upgrade():
@@ -174,18 +194,49 @@ def upgrade():
                nullable=True)
         batch_op.drop_index('idx_users_reset_token')
 
+    # Check if columns and constraints exist before trying to modify them
+    owner_type_exists = column_exists('wallets', 'owner_type')
+    owner_id_exists = column_exists('wallets', 'owner_id')
+    constraint_exists_flag = constraint_exists('wallets', 'wallets_user_id_key')
+    
     with op.batch_alter_table('wallets', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('owner_type', sa.String(length=20), nullable=False))
-        batch_op.add_column(sa.Column('owner_id', sa.Integer(), nullable=False))
-        batch_op.alter_column('user_id',
-               existing_type=sa.INTEGER(),
-               nullable=True)
-        batch_op.alter_column('wallet_number',
-               existing_type=sa.UUID(),
-               type_=sa.String(length=36),
-               existing_nullable=True,
-               existing_server_default=sa.text('gen_random_uuid()'))
-        batch_op.drop_constraint('wallets_user_id_key', type_='unique')
+        # Only add columns if they don't already exist
+        if not owner_type_exists:
+            batch_op.add_column(sa.Column('owner_type', sa.String(length=20), nullable=False, server_default='USER'))
+        if not owner_id_exists:
+            batch_op.add_column(sa.Column('owner_id', sa.Integer(), nullable=False, server_default='0'))
+        
+        # These operations are safe to run even if columns already exist
+        try:
+            batch_op.alter_column('user_id',
+                   existing_type=sa.INTEGER(),
+                   nullable=True)
+        except Exception:
+            pass  # Column may already be nullable
+        
+        try:
+            batch_op.alter_column('wallet_number',
+                   existing_type=sa.UUID(),
+                   type_=sa.String(length=36),
+                   existing_nullable=True,
+                   existing_server_default=sa.text('gen_random_uuid()'))
+        except Exception:
+            pass  # Column type may already be correct
+        
+        # Only drop constraint if it exists
+        if constraint_exists_flag:
+            try:
+                batch_op.drop_constraint('wallets_user_id_key', type_='unique')
+            except Exception:
+                pass  # Constraint may have been dropped already
+    
+    # Update existing rows if columns were just added (after batch_alter_table context)
+    if not owner_type_exists or not owner_id_exists:
+        bind = op.get_bind()
+        if not owner_type_exists:
+            bind.execute(sa.text("UPDATE wallets SET owner_type = 'USER' WHERE owner_type IS NULL OR owner_type = ''"))
+        if not owner_id_exists:
+            bind.execute(sa.text("UPDATE wallets SET owner_id = COALESCE(user_id, 0) WHERE owner_id IS NULL OR owner_id = 0"))
 
     # ### end Alembic commands ###
 

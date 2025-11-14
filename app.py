@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from config import Config
 from extensions import db, migrate, jwt, mail, limiter, redis_client, cache_service
-from api.v1 import api_v1_bp
+from routes import api_v1_bp
 from services.ledger_service import LedgerService
 from services.encryption_service import EncryptionService
 from services.health_service import HealthService

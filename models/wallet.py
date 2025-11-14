@@ -51,20 +51,32 @@ class Wallet(db.Model):
     )
 
     def __init__(self, **kwargs):
+        # Extract owner_type and owner_id before calling super()
+        owner_type = kwargs.pop("owner_type", None)
+        owner_id = kwargs.pop("owner_id", None)
+
+        # Call parent constructor
         super().__init__(**kwargs)
+
         # Set owner_type and owner_id if not provided (for backward compatibility)
-        if "owner_type" not in kwargs:
+        if owner_type is None:
             if self.user_id:
                 self.owner_type = "USER"
                 self.owner_id = self.user_id
             else:
-                self.owner_type = kwargs.get("owner_type", "USER")
-                self.owner_id = kwargs.get("owner_id", 0)
-        elif not hasattr(self, "owner_id") or self.owner_id is None:
-            if self.user_id and self.owner_type == "USER":
-                self.owner_id = self.user_id
+                self.owner_type = "USER"
+                self.owner_id = 0
+        else:
+            self.owner_type = owner_type
+            if owner_id is None:
+                if self.user_id and self.owner_type == "USER":
+                    self.owner_id = self.user_id
+                else:
+                    self.owner_id = 0
             else:
-                self.owner_id = kwargs.get("owner_id", 0)
+                self.owner_id = owner_id
+
+        # Set display_number if not provided
         if not self.display_number:
             self.display_number = f"WAL-{random.randint(100000000, 999999999)}"
 

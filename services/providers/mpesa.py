@@ -1,213 +1,171 @@
 """
-M-Pesa (Daraja) provider adapter
+M-Pesa (Daraja) payment provider adapter
+Implements ProviderAdapter interface for integration with ProviderService
 """
 
-import os
-import base64
-import requests
-from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Any, Optional
 from flask import current_app
 from services.providers.base import ProviderAdapter, ProviderInitResponse, PayoutResponse
+from services.providers.mpesa.auth import MpesaAuth
+from services.providers.mpesa.stk_push import MpesaSTKPush
+from services.providers.mpesa.c2b import MpesaC2B
 
 
 class MpesaAdapter(ProviderAdapter):
-    """M-Pesa STK Push and B2C adapter via Safaricom Daraja API"""
+    """M-Pesa payment provider adapter implementing ProviderAdapter interface"""
 
     def __init__(self):
-        self.consumer_key = os.environ.get("MPESA_CONSUMER_KEY")
-        self.consumer_secret = os.environ.get("MPESA_CONSUMER_SECRET")
-        self.passkey = os.environ.get("MPESA_PASSKEY")
-        self.shortcode = os.environ.get("MPESA_SHORTCODE")
-        self.initiator_name = os.environ.get("MPESA_INITIATOR_NAME", "")
-        self.security_credential = os.environ.get("MPESA_SECURITY_CREDENTIAL", "")
-        self.b2c_shortcode = os.environ.get("MPESA_B2C_SHORTCODE", self.shortcode)
-        self.base_url = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
-        self.callback_url = os.environ.get("MPESA_CALLBACK_URL", "")
-        self.b2c_callback_url = os.environ.get("MPESA_B2C_CALLBACK_URL", "")
-        self._access_token = None
-
-    def _get_access_token(self) -> Optional[str]:
-        """Obtain OAuth token from Daraja"""
-        if self._access_token:
-            return self._access_token
-        url = f"{self.base_url}/oauth/v1/generate?grant_type=client_credentials"
-        auth = base64.b64encode(f"{self.consumer_key}:{self.consumer_secret}".encode()).decode()
-        try:
-            resp = requests.get(url, headers={"Authorization": f"Basic {auth}"}, timeout=10)
-            if resp.status_code == 200:
-                data = resp.json()
-                self._access_token = data.get("access_token")
-                return self._access_token
-        except Exception as e:
-            current_app.logger.exception("Failed to get M-Pesa access token")
-        return None
+        self.auth = MpesaAuth()
+        self.stk_push = MpesaSTKPush()
+        self.c2b = MpesaC2B()
 
     def initiate_debit(
         self, *, phone: str, amount: Decimal, currency: str, reference: str
     ) -> ProviderInitResponse:
-        """Initiate STK Push"""
-        token = self._get_access_token()
-        if not token:
-            return ProviderInitResponse(False, message="Failed to authenticate with M-Pesa")
-
-        # Format phone (remove + and ensure 254 prefix)
-        phone_clean = phone.replace("+", "").replace(" ", "")
-        if phone_clean.startswith("0"):
-            phone_clean = f"254{phone_clean[1:]}"
-
-        url = f"{self.base_url}/mpesa/stkpush/v1/processrequest"
-        # Generate current timestamp in format YYYYMMDDHHmmss
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        # Generate password: base64(BusinessShortCode + Passkey + Timestamp)
-        password_str = f"{self.shortcode}{self.passkey}{timestamp}"
-        password = base64.b64encode(password_str.encode()).decode()
-
-        payload = {
-            "BusinessShortCode": self.shortcode,
-            "Password": password,
-            "Timestamp": timestamp,
-            "TransactionType": "CustomerPayBillOnline",
-            "Amount": int(float(amount)),
-            "PartyA": phone_clean,
-            "PartyB": self.shortcode,
-            "PhoneNumber": phone_clean,
-            "CallBackURL": self.callback_url,
-            "AccountReference": reference[:20],
-            "TransactionDesc": "KingdomPay Payment",
-        }
-
-        try:
-            resp = requests.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                timeout=30,
+        """
+        Initiate a debit (STK Push) to collect funds from customer
+        
+        Args:
+            phone: Customer phone number
+            amount: Amount to collect
+            currency: Currency code (should be KES for M-Pesa)
+            reference: Unique transaction reference
+            
+        Returns:
+            ProviderInitResponse with success status and checkout_request_id
+        """
+        if currency != "KES":
+            return ProviderInitResponse(
+                False, message=f"M-Pesa only supports KES, got {currency}"
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                checkout_id = data.get("CheckoutRequestID")
-                if checkout_id:
-                    return ProviderInitResponse(True, provider_ref=checkout_id)
-                error_msg = data.get("errorMessage", resp.text)
-                return ProviderInitResponse(False, message=error_msg)
-            return ProviderInitResponse(False, message=resp.text)
-        except Exception as e:
-            current_app.logger.exception("M-Pesa STK Push failed")
-            return ProviderInitResponse(False, message=str(e))
+
+        result = self.stk_push.initiate_stk_push(
+            phone=phone,
+            amount=amount,
+            account_reference=reference,
+            transaction_desc="Payment",
+        )
+
+        if result.get("success"):
+            checkout_request_id = result.get("checkout_request_id")
+            return ProviderInitResponse(
+                True, provider_ref=checkout_request_id, message=result.get("customer_message")
+            )
+        else:
+            return ProviderInitResponse(False, message=result.get("message", "STK Push failed"))
 
     def handle_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse M-Pesa STK callback"""
-        result_code = payload.get("Body", {}).get("stkCallback", {}).get("ResultCode")
-        checkout_id = payload.get("Body", {}).get("stkCallback", {}).get("CheckoutRequestID")
-        merchant_req_id = payload.get("Body", {}).get("stkCallback", {}).get("MerchantRequestID")
-        if result_code == 0:
-            callback_meta = payload.get("Body", {}).get("stkCallback", {}).get("CallbackMetadata", {}).get("Item", [])
-            mpesa_receipt = next((i.get("Value") for i in callback_meta if i.get("Name") == "MpesaReceiptNumber"), None)
-            amount = next((i.get("Value") for i in callback_meta if i.get("Name") == "Amount"), None)
+        """
+        Parse and validate M-Pesa webhook payload (STK callback)
+        
+        Args:
+            payload: Raw webhook payload from M-Pesa
+            
+        Returns:
+            Parsed webhook event with status and provider_ref
+        """
+        # Handle STK Push callback
+        body = payload.get("Body", {})
+        stk_callback = body.get("stkCallback", {})
+        
+        if stk_callback:
+            result_code = stk_callback.get("ResultCode")
+            checkout_request_id = body.get("CheckoutRequestID") or stk_callback.get("CheckoutRequestID")
+            
+            if result_code == 0:
+                # Success
+                callback_metadata = stk_callback.get("CallbackMetadata", {})
+                items = callback_metadata.get("Item", [])
+                
+                # Extract receipt number and other details
+                receipt_number = None
+                amount = None
+                phone = None
+                
+                for item in items:
+                    name = item.get("Name")
+                    value = item.get("Value")
+                    if name == "MpesaReceiptNumber":
+                        receipt_number = value
+                    elif name == "Amount":
+                        amount = value
+                    elif name == "PhoneNumber":
+                        phone = value
+                
+                return {
+                    "status": "SUCCESS",
+                    "provider_ref": receipt_number,
+                    "checkout_request_id": checkout_request_id,
+                    "amount": amount,
+                    "phone": phone,
+                }
+            else:
+                # Failed
+                result_desc = stk_callback.get("ResultDesc", "Payment failed")
+                return {
+                    "status": "FAILED",
+                    "provider_ref": checkout_request_id,
+                    "checkout_request_id": checkout_request_id,
+                    "message": result_desc,
+                }
+        
+        # Handle C2B confirmation (if needed)
+        trans_id = payload.get("TransID")
+        if trans_id:
+            trans_amount = payload.get("TransAmount")
             return {
                 "status": "SUCCESS",
-                "provider_ref": mpesa_receipt or checkout_id,
-                "checkout_request_id": checkout_id,
-                "amount": amount,
+                "provider_ref": trans_id,
+                "amount": trans_amount,
             }
-        return {"status": "FAILED", "provider_ref": checkout_id, "message": "Payment cancelled or failed"}
+        
+        # Unknown payload format
+        current_app.logger.warning(f"Unknown M-Pesa webhook payload format: {payload}")
+        return {
+            "status": "UNKNOWN",
+            "provider_ref": None,
+            "message": "Unknown webhook payload format",
+        }
 
     def payout(
         self, *, phone: str, amount: Decimal, currency: str, reference: str
     ) -> PayoutResponse:
-        """B2C payout via M-Pesa API"""
-        token = self._get_access_token()
-        if not token:
-            return PayoutResponse(False, message="Failed to authenticate with M-Pesa")
-
-        if not self.initiator_name or not self.security_credential:
-            return PayoutResponse(False, message="B2C credentials not configured")
-
-        # Format phone (remove + and ensure 254 prefix)
-        phone_clean = phone.replace("+", "").replace(" ", "")
-        if phone_clean.startswith("0"):
-            phone_clean = f"254{phone_clean[1:]}"
-
-        url = f"{self.base_url}/mpesa/b2c/v1/paymentrequest"
+        """
+        Initiate a payout (B2C) to recipient
+        Note: B2C API implementation can be added here later
         
-        payload = {
-            "InitiatorName": self.initiator_name,
-            "SecurityCredential": self.security_credential,
-            "CommandID": "BusinessPayment",
-            "Amount": int(float(amount)),
-            "PartyA": self.b2c_shortcode,
-            "PartyB": phone_clean,
-            "Remarks": reference[:100],
-            "QueueTimeOutURL": self.b2c_callback_url,
-            "ResultURL": self.b2c_callback_url,
-            "Occasion": "KingdomPay Payout",
-        }
-
-        try:
-            resp = requests.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                conversation_id = data.get("ConversationID")
-                originator_conversation_id = data.get("OriginatorConversationID")
-                if conversation_id:
-                    return PayoutResponse(True, provider_ref=conversation_id)
-                error_msg = data.get("errorMessage", resp.text)
-                return PayoutResponse(False, message=error_msg)
-            return PayoutResponse(False, message=resp.text)
-        except Exception as e:
-            current_app.logger.exception("M-Pesa B2C payout failed")
-            return PayoutResponse(False, message=str(e))
+        Args:
+            phone: Recipient phone number
+            amount: Payout amount
+            currency: Currency code
+            reference: Unique transaction reference
+            
+        Returns:
+            PayoutResponse with success status
+        """
+        # B2C implementation can be added here
+        # For now, return not implemented
+        return PayoutResponse(
+            False, message="M-Pesa B2C payout not yet implemented. Use B2C API separately."
+        )
 
     def refund(
         self, *, provider_ref: str, amount: Decimal, reason: str
     ) -> PayoutResponse:
-        """Refund via transaction reversal API"""
-        token = self._get_access_token()
-        if not token:
-            return PayoutResponse(False, message="Failed to authenticate with M-Pesa")
-
-        if not self.initiator_name or not self.security_credential:
-            return PayoutResponse(False, message="Reversal credentials not configured")
-
-        url = f"{self.base_url}/mpesa/reversal/v1/request"
+        """
+        Refund a transaction
+        Note: Transaction reversal API implementation can be added here later
         
-        payload = {
-            "Initiator": self.initiator_name,
-            "SecurityCredential": self.security_credential,
-            "CommandID": "TransactionReversal",
-            "TransactionID": provider_ref,
-            "Amount": int(float(amount)),
-            "ReceiverParty": self.shortcode,
-            "RecieverIdentifierType": "4",  # Organization
-            "ResultURL": self.b2c_callback_url or self.callback_url,
-            "QueueTimeOutURL": self.b2c_callback_url or self.callback_url,
-            "Remarks": reason[:100] or "Refund",
-            "Occasion": "Refund",
-        }
-
-        try:
-            resp = requests.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                conversation_id = data.get("ConversationID")
-                if conversation_id:
-                    return PayoutResponse(True, provider_ref=conversation_id)
-                error_msg = data.get("errorMessage", resp.text)
-                return PayoutResponse(False, message=error_msg)
-            return PayoutResponse(False, message=resp.text)
-        except Exception as e:
-            current_app.logger.exception("M-Pesa refund failed")
-            return PayoutResponse(False, message=str(e))
-
+        Args:
+            provider_ref: Original transaction reference
+            amount: Refund amount
+            reason: Refund reason
+            
+        Returns:
+            PayoutResponse with success status
+        """
+        # Transaction reversal implementation can be added here
+        return PayoutResponse(
+            False, message="M-Pesa refund not yet implemented. Use reversal API separately."
+        )

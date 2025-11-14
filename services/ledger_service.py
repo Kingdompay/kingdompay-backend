@@ -186,7 +186,7 @@ class LedgerService:
     def post_transfer(
         self,
         *,
-        from_wallet_id: int,
+        from_wallet_id: Optional[int],
         to_wallet_id: int,
         amount: Decimal,
         currency: str,
@@ -195,7 +195,10 @@ class LedgerService:
         external_ref: Optional[str] = None,
         meta: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        if from_wallet_id == to_wallet_id:
+        # Handle external deposits (from_wallet_id is None)
+        is_external_deposit = from_wallet_id is None
+        
+        if not is_external_deposit and from_wallet_id == to_wallet_id:
             return {"success": False, "message": "Cannot transfer to the same wallet"}
 
         try:
@@ -213,61 +216,116 @@ class LedgerService:
         try:
             # Use a SAVEPOINT to allow calls within an existing transaction (tests / nested flows)
             with db.session.begin_nested():
-                # Lock wallets (best effort on SQLite)
-                source: Wallet = (
-                    db.session.query(Wallet)
-                    .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
-                    .with_for_update()
-                    .filter(Wallet.id == from_wallet_id)
-                    .first()
-                )
-                dest: Wallet = (
-                    db.session.query(Wallet)
-                    .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
-                    .with_for_update()
-                    .filter(Wallet.id == to_wallet_id)
-                    .first()
-                )
+                if is_external_deposit:
+                    # External deposit: only need destination wallet
+                    # Try without lock first to debug
+                    dest_check = db.session.query(Wallet).filter(Wallet.id == to_wallet_id).first()
+                    current_app.logger.info(f"External deposit: Checking wallet {to_wallet_id}, found: {dest_check is not None}")
+                    
+                    dest: Wallet = (
+                        db.session.query(Wallet)
+                        .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
+                        .with_for_update()
+                        .filter(Wallet.id == to_wallet_id)
+                        .first()
+                    )
+                    
+                    if not dest:
+                        current_app.logger.error(f"External deposit failed: Wallet {to_wallet_id} not found (check found: {dest_check is not None})")
+                        return {"success": False, "message": f"Wallet {to_wallet_id} not found"}
+                    if dest.currency != currency:
+                        current_app.logger.error(f"External deposit failed: Currency mismatch. Wallet currency: {dest.currency}, expected: {currency}")
+                        return {"success": False, "message": "Currency mismatch"}
+                    
+                    journal = LedgerJournal(
+                        external_ref=external_ref,
+                        idempotency_key=idempotency_key,
+                        description=memo,
+                    )
+                    db.session.add(journal)
+                    db.session.flush()
 
-                if not source or not dest:
-                    return {"success": False, "message": "Wallet not found"}
-                if source.currency != currency or dest.currency != currency:
-                    return {"success": False, "message": "Currency mismatch"}
-                if Decimal(source.balance) < amt:
-                    return {"success": False, "message": "Insufficient funds"}
+                    # For external deposits: debit wallet (increase balance), credit external account
+                    debit_entry = LedgerEntry(
+                        journal_id=journal.id,
+                        wallet_id=to_wallet_id,
+                        account_code="WALLET_CASH",
+                        debit=amt,
+                        credit=Decimal("0.00"),
+                        currency=currency,
+                        meta=meta or {},
+                    )
+                    # External account entry (no wallet_id for external)
+                    credit_entry = LedgerEntry(
+                        journal_id=journal.id,
+                        wallet_id=None,  # External account
+                        account_code="EXTERNAL_DEPOSIT",
+                        debit=Decimal("0.00"),
+                        credit=amt,
+                        currency=currency,
+                        meta=meta or {},
+                    )
+                    db.session.add_all([debit_entry, credit_entry])
 
-                journal = LedgerJournal(
-                    external_ref=external_ref,
-                    idempotency_key=idempotency_key,
-                    description=memo,
-                )
-                db.session.add(journal)
-                db.session.flush()
+                    # Update wallet balance
+                    dest.balance = Decimal(dest.balance) + amt
+                    db.session.add(dest)
+                else:
+                    # Internal transfer: need both wallets
+                    source: Wallet = (
+                        db.session.query(Wallet)
+                        .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
+                        .with_for_update()
+                        .filter(Wallet.id == from_wallet_id)
+                        .first()
+                    )
+                    dest: Wallet = (
+                        db.session.query(Wallet)
+                        .options(load_only(Wallet.id, Wallet.balance, Wallet.currency))
+                        .with_for_update()
+                        .filter(Wallet.id == to_wallet_id)
+                        .first()
+                    )
 
-                debit_entry = LedgerEntry(
-                    journal_id=journal.id,
-                    wallet_id=to_wallet_id,
-                    account_code="WALLET_CASH",
-                    debit=amt,
-                    credit=Decimal("0.00"),
-                    currency=currency,
-                    meta=meta or {},
-                )
-                credit_entry = LedgerEntry(
-                    journal_id=journal.id,
-                    wallet_id=from_wallet_id,
-                    account_code="WALLET_CASH",
-                    debit=Decimal("0.00"),
-                    credit=amt,
-                    currency=currency,
-                    meta=meta or {},
-                )
-                db.session.add_all([debit_entry, credit_entry])
+                    if not source or not dest:
+                        return {"success": False, "message": "Wallet not found"}
+                    if source.currency != currency or dest.currency != currency:
+                        return {"success": False, "message": "Currency mismatch"}
+                    if Decimal(source.balance) < amt:
+                        return {"success": False, "message": "Insufficient funds"}
 
-                # Temporary denormalized wallet balance updates
-                source.balance = Decimal(source.balance) - amt
-                dest.balance = Decimal(dest.balance) + amt
-                db.session.add_all([source, dest])
+                    journal = LedgerJournal(
+                        external_ref=external_ref,
+                        idempotency_key=idempotency_key,
+                        description=memo,
+                    )
+                    db.session.add(journal)
+                    db.session.flush()
+
+                    debit_entry = LedgerEntry(
+                        journal_id=journal.id,
+                        wallet_id=to_wallet_id,
+                        account_code="WALLET_CASH",
+                        debit=amt,
+                        credit=Decimal("0.00"),
+                        currency=currency,
+                        meta=meta or {},
+                    )
+                    credit_entry = LedgerEntry(
+                        journal_id=journal.id,
+                        wallet_id=from_wallet_id,
+                        account_code="WALLET_CASH",
+                        debit=Decimal("0.00"),
+                        credit=amt,
+                        currency=currency,
+                        meta=meta or {},
+                    )
+                    db.session.add_all([debit_entry, credit_entry])
+
+                    # Temporary denormalized wallet balance updates
+                    source.balance = Decimal(source.balance) - amt
+                    dest.balance = Decimal(dest.balance) + amt
+                    db.session.add_all([source, dest])
 
             return {"success": True, "status": "posted", "journal_id": journal.id}
         except IntegrityError:
