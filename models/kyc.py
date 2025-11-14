@@ -5,11 +5,11 @@ Handles user verification and compliance requirements
 
 from datetime import datetime
 from enum import Enum
-from flask_sqlalchemy import SQLAlchemy
+from extensions import db
 from sqlalchemy import Index, CheckConstraint
 import uuid
 
-db = SQLAlchemy()
+# Use the shared SQLAlchemy instance from extensions
 
 
 class KYCStatus(Enum):

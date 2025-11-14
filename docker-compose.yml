@@ -51,6 +51,29 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RATELIMIT_STORAGE_URL=redis://redis:6379/1
       - LOG_LEVEL=INFO
+      # Provider webhooks (update BASE_URL in production)
+      - BASE_URL=${BASE_URL:-http://localhost:5001}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - MPESA_CALLBACK_URL=${MPESA_CALLBACK_URL:-${BASE_URL}/api/v1/webhooks/provider/MPESA}
+      - AIRTEL_CALLBACK_URL=${AIRTEL_CALLBACK_URL:-${BASE_URL}/api/v1/webhooks/provider/AIRTEL}
+      - TKASH_CALLBACK_URL=${TKASH_CALLBACK_URL:-${BASE_URL}/api/v1/webhooks/provider/TKASH}
+      # M-Pesa (Daraja)
+      - MPESA_CONSUMER_KEY=${MPESA_CONSUMER_KEY:-}
+      - MPESA_CONSUMER_SECRET=${MPESA_CONSUMER_SECRET:-}
+      - MPESA_PASSKEY=${MPESA_PASSKEY:-}
+      - MPESA_SHORTCODE=${MPESA_SHORTCODE:-}
+      - MPESA_INITIATOR_NAME=${MPESA_INITIATOR_NAME:-}
+      - MPESA_SECURITY_CREDENTIAL=${MPESA_SECURITY_CREDENTIAL:-}
+      - MPESA_BASE_URL=${MPESA_BASE_URL:-https://sandbox.safaricom.co.ke}
+      # Airtel Money
+      - AIRTEL_CLIENT_ID=${AIRTEL_CLIENT_ID:-}
+      - AIRTEL_CLIENT_SECRET=${AIRTEL_CLIENT_SECRET:-}
+      - AIRTEL_BASE_URL=${AIRTEL_BASE_URL:-https://openapiuat.airtel.africa}
+      # T-Kash
+      - TKASH_API_KEY=${TKASH_API_KEY:-}
+      - TKASH_API_SECRET=${TKASH_API_SECRET:-}
+      - TKASH_MERCHANT_ID=${TKASH_MERCHANT_ID:-}
+      - TKASH_BASE_URL=${TKASH_BASE_URL:-https://api.t-kash.co.ke}
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,6 +81,7 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ./static:/app/static
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s

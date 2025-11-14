@@ -50,10 +50,18 @@ class TestAPIIntegration:
                 assert response.status_code == 200
                 data = json.loads(response.data)
                 assert data["success"] is True
-                assert "tokens" in data
+                # Accept either 'tokens' or top-level tokens
+                has_tokens = "tokens" in data or (
+                    "access_token" in data and ("refresh_token" in data or "refresh_expires_in" in data)
+                )
+                assert has_tokens
                 assert "user" in data
 
-                access_token = data["tokens"]["access_token"]
+                access_token = (
+                    data["tokens"]["access_token"]
+                    if "tokens" in data
+                    else data.get("access_token")
+                )
                 headers = {
                     "Authorization": f"Bearer {access_token}",
                     "Content-Type": "application/json",

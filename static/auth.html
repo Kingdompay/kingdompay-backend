@@ -694,49 +694,37 @@
               '<i class="fas fa-spinner fa-spin"></i> Verifying...';
           }
 
-          // DEMO MODE: OTP verification is placeholder - any code works
-          // In production, this would call AuthAPI.verifyOTP(phone, otp, fullname)
-          const response = {
-            success: true,
-            message: "OTP verified successfully (Demo Mode)",
-            user: {
-              id: 1,
-              full_name: fullname,
-              phone_number: phone,
-              email: email,
-              is_phone_verified: true,
-              wallet_number: "WAL-123456789",
-            },
-            access_token:
-              "demo_access_token_placeholder_" +
-              Math.random().toString(36).substring(7),
-            refresh_token:
-              "demo_refresh_token_placeholder_" +
-              Math.random().toString(36).substring(7),
-          };
+          // Call the real API to verify OTP
+          const response = await AuthAPI.verifyOTP(phone, otp, fullname);
 
-          if (response.success) {
+          if (response.success && response.access_token) {
+            // Tokens are automatically stored by AuthAPI.verifyOTP
+
             // Update user info display
-            const userInfo = response.user;
-            document.querySelector("#user-info p strong").textContent = "Name:";
-            document.querySelectorAll(
-              "#user-info p"
-            )[0].innerHTML = `<strong>Name:</strong> ${userInfo.full_name}`;
-            document.querySelectorAll(
-              "#user-info p"
-            )[1].innerHTML = `<strong>Phone:</strong> ${userInfo.phone_number}`;
-            document.querySelectorAll(
-              "#user-info p"
-            )[2].innerHTML = `<strong>Email:</strong> ${
-              email || "Not provided"
-            }`;
+            const userInfo = response.user || {};
+            if (document.querySelectorAll("#user-info p").length > 0) {
+              document.querySelectorAll(
+                "#user-info p"
+              )[0].innerHTML = `<strong>Name:</strong> ${
+                userInfo.full_name || fullname
+              }`;
+              document.querySelectorAll(
+                "#user-info p"
+              )[1].innerHTML = `<strong>Phone:</strong> ${
+                userInfo.phone_number || phone
+              }`;
+              document.querySelectorAll(
+                "#user-info p"
+              )[2].innerHTML = `<strong>Email:</strong> ${
+                userInfo.email || email || "Not provided"
+              }`;
+            }
 
             // Show success
             document.getElementById("step2").classList.remove("active");
             document.getElementById("step2").classList.add("completed");
             document.getElementById("step3").classList.add("active");
             document.getElementById("user-info").style.display = "block";
-            document.getElementById("tokens").style.display = "block";
             currentStep = 3;
             updateProgress();
 
@@ -744,9 +732,20 @@
             document
               .getElementById("step3")
               .scrollIntoView({ behavior: "smooth" });
+
+            // Auto-redirect to wallet after 2 seconds
+            setTimeout(() => {
+              window.location.href = "/static/wallet.html";
+            }, 2000);
+          } else {
+            showError(
+              response.message || "Invalid verification code. Please try again."
+            );
           }
         } catch (error) {
-          showError("Invalid verification code. Please try again.");
+          showError(
+            error.message || "Invalid verification code. Please try again."
+          );
         } finally {
           // Re-enable button
           const button = document.querySelector("#step2 button");
@@ -840,14 +839,23 @@
       }
 
       function continueToWallet() {
-        window.location.href = "/wallet-demo";
+        window.location.href = "/static/wallet.html";
       }
 
-      // Initialize
-      updateProgress();
+      function showError(message) {
+        alert(message);
+      }
 
-      // Animate steps on load
+      // Check if already authenticated on page load
       document.addEventListener("DOMContentLoaded", function () {
+        // If user is already authenticated, redirect to wallet
+        if (isAuthenticated()) {
+          window.location.href = "/static/wallet.html";
+          return;
+        }
+
+        // Initialize
+        updateProgress();
         const steps = document.querySelectorAll(".step");
         steps.forEach((step, index) => {
           step.style.opacity = "0";

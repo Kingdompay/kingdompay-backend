@@ -17,7 +17,12 @@ from .community import (
 )
 from .campaign import Campaign
 from .webhook import Webhook, WebhookEvent
+from .payment import Payment
 from .kyc import KYCDocument, KYCVerification, KYCAuditLog
+from .fee import TransactionFee, CommunityContribution, CommunityDevelopmentFund
+from .multisig import MultiSigApproval, MultiSigSignature
+from .risk import Blacklist, AMLCase
+from .settlement_batch import SettlementBatch
 
 __all__ = [
     "User",
@@ -34,7 +39,16 @@ __all__ = [
     "Campaign",
     "Webhook",
     "WebhookEvent",
+    "Payment",
     "KYCDocument",
     "KYCVerification",
     "KYCAuditLog",
+    "TransactionFee",
+    "CommunityContribution",
+    "CommunityDevelopmentFund",
+    "MultiSigApproval",
+    "MultiSigSignature",
+    "Blacklist",
+    "AMLCase",
+    "SettlementBatch",
 ]

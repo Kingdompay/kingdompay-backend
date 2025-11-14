@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from config import Config
 from extensions import db, migrate, jwt, mail, limiter, redis_client, cache_service
-from api.v1 import api_v1_bp
+from routes import api_v1_bp
 from services.ledger_service import LedgerService
 from services.encryption_service import EncryptionService
 from services.health_service import HealthService
@@ -51,6 +51,15 @@ def create_app(config_class=Config):
     app.cache_service = cache_service
     app.health_service = HealthService()
     app.kyc_service = KYCService()
+
+    # Initialize system wallets on startup
+    with app.app_context():
+        from services.wallet_service import WalletService
+
+        try:
+            WalletService.initialize_system_wallets()
+        except Exception as e:
+            app.logger.warning(f"Could not initialize system wallets: {e}")
 
     # Initialize security middleware
     SecurityMiddleware(app)

@@ -18,7 +18,7 @@ class LedgerEntry(db.Model):
         nullable=False,
     )
     wallet_id = db.Column(
-        db.Integer, db.ForeignKey("wallets.id", ondelete="CASCADE"), nullable=False
+        db.Integer, db.ForeignKey("wallets.id", ondelete="CASCADE"), nullable=True
     )
     account_code = db.Column(db.String(50), nullable=False)
     debit = db.Column(db.Numeric(15, 2), default=0.00, nullable=False)

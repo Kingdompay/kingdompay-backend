@@ -49,8 +49,7 @@ class TestWalletRoutes:
         assert data["pagination"]["per_page"] == 10
 
     def test_transfer_funds_success(self, client, auth_headers, app, test_user):
-        """Test successful fund transfer"""
-        # Create another user and wallet for transfer
+        """Test successful fund transfer via new /transfers with fees"""
         with app.app_context():
             from models import User, Wallet
             from extensions import db
@@ -74,23 +73,31 @@ class TestWalletRoutes:
             source_wallet.balance = 1000.0
             db.session.commit()
 
-            # Perform transfer
+            # Perform transfer using /transfers (fee-integrated)
             response = client.post(
-                "/api/v1/wallets/transfer",
-                headers=auth_headers,
+                "/api/v1/transfers",
+                headers={**auth_headers, "Idempotency-Key": "test-transfer-1"},
                 json={
-                    "destination_wallet_number": dest_wallet.display_number,
+                    "to_wallet": dest_wallet.id,
                     "amount": 100.0,
-                    "description": "Test transfer",
+                    "memo": "Test transfer",
                 },
             )
 
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data["success"] is True
-            assert "transaction" in data
-            assert data["source_balance"] == 900.0
-            assert data["destination_balance"] == 100.0
+            assert "journal_id" in data
+            assert "fee_breakdown" in data
+
+            # No community involved → platform+federal fees (1.0% of 100 = 1)
+            # Using Decimal math in service, but amounts are small: 100 + 1 = 101 total deduction
+            # Refresh wallets and assert balances
+            db.session.refresh(source_wallet)
+            db.session.refresh(dest_wallet)
+
+            assert float(source_wallet.balance) == pytest.approx(899.0, rel=1e-6)
+            assert float(dest_wallet.balance) == pytest.approx(100.0, rel=1e-6)
 
     def test_transfer_funds_insufficient_balance(self, client, auth_headers, app):
         """Test transfer with insufficient balance"""
@@ -112,14 +119,14 @@ class TestWalletRoutes:
             db.session.add(dest_wallet)
             db.session.commit()
 
-            # Perform transfer with insufficient funds
+            # Perform transfer with insufficient funds using /transfers
             response = client.post(
-                "/api/v1/wallets/transfer",
-                headers=auth_headers,
+                "/api/v1/transfers",
+                headers={**auth_headers, "Idempotency-Key": "test-transfer-2"},
                 json={
-                    "destination_wallet_number": dest_wallet.display_number,
+                    "to_wallet": dest_wallet.id,
                     "amount": 10000.0,
-                    "description": "Test transfer",
+                    "memo": "Test transfer",
                 },
             )
 
@@ -142,20 +149,21 @@ class TestWalletRoutes:
             wallet.balance = 1000.0
             db.session.commit()
 
+        # Using /transfers with invalid wallet id
         response = client.post(
-            "/api/v1/wallets/transfer",
-            headers=auth_headers,
+            "/api/v1/transfers",
+            headers={**auth_headers, "Idempotency-Key": "test-transfer-3"},
             json={
-                "destination_wallet_number": "INVALID-WALLET",
+                "to_wallet": 999999,
                 "amount": 100.0,
-                "description": "Test transfer",
+                "memo": "Test transfer",
             },
         )
 
-        assert response.status_code == 404
+        assert response.status_code == 400
         data = json.loads(response.data)
         assert data["success"] is False
-        assert "Destination wallet not found" in data["message"]
+        assert "Wallet not found" in data["message"]
 
     def test_transfer_funds_self_transfer(self, client, auth_headers, test_wallet, app):
         """Test transfer to same wallet"""
@@ -170,12 +178,12 @@ class TestWalletRoutes:
             db.session.commit()
 
         response = client.post(
-            "/api/v1/wallets/transfer",
-            headers=auth_headers,
+            "/api/v1/transfers",
+            headers={**auth_headers, "Idempotency-Key": "test-transfer-4"},
             json={
-                "destination_wallet_number": test_wallet.display_number,
+                "to_wallet": test_wallet.id,
                 "amount": 100.0,
-                "description": "Self transfer",
+                "memo": "Self transfer",
             },
         )
 

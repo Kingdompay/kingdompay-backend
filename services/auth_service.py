@@ -66,12 +66,29 @@ class AuthService:
         message = f"Your KingdomPay verification code is: {otp.otp_code}. Valid for 5 minutes."
         sms_result = self.sms_service.send_sms(validated_phone, message)
 
+        # In development, include OTP in response for testing
+        response = {
+            "success": True,
+            "message": "OTP sent successfully",
+            "phone_number": validated_phone,
+        }
+        
+        # Include OTP if: development mode OR no SMS provider configured (for testing)
+        is_development = (
+            current_app.config.get("FLASK_ENV") == "development"
+            or current_app.config.get("APP_ENV") == "development"
+            or not self.sms_service.api_key  # No SMS provider configured
+        )
+        
+        if is_development:
+            current_app.logger.info(f"OTP for {validated_phone}: {otp.otp_code}")
+            response["otp_code"] = otp.otp_code  # Include OTP for testing
+            response["message"] = (
+                "OTP sent successfully (development mode - OTP included in response)"
+            )
+
         if sms_result["success"]:
-            return {
-                "success": True,
-                "message": "OTP sent successfully",
-                "phone_number": validated_phone,
-            }
+            return response
         else:
             return {
                 "success": False,
@@ -114,23 +131,40 @@ class AuthService:
                             is_phone_verified=True,
                         )
                         db.session.add(user)
-                        db.session.flush()  # Get user ID
+                        db.session.flush()  # Get user ID without committing
 
                         # Create wallet for new user
                         from models.wallet import Wallet
 
-                        wallet = Wallet(user_id=user.id)
+                        # Create wallet for new user
+                        # Wallet.__init__ will automatically set owner_type and owner_id from user_id
+                        wallet = Wallet(
+                            user_id=user.id,
+                            currency="KES",
+                        )
                         db.session.add(wallet)
                         db.session.commit()
 
+                        current_app.logger.info(
+                            f"Successfully created user {user.id} and wallet {wallet.id} for {validated_phone}"
+                        )
+
                     except Exception as e:
                         db.session.rollback()
+                        current_app.logger.exception(
+                            f"Error creating user account (attempt {attempt + 1}): {str(e)}"
+                        )
+
                         # Check if it's a unique constraint violation
                         if (
                             "UNIQUE constraint failed" in str(e)
                             or "duplicate key" in str(e).lower()
+                            or "unique constraint" in str(e).lower()
                         ):
                             # User was created by another concurrent request
+                            current_app.logger.info(
+                                f"Unique constraint violation detected, retrying..."
+                            )
                             if attempt < max_retries - 1:
                                 continue  # Retry
                             else:
@@ -144,14 +178,22 @@ class AuthService:
                                     db.session.commit()
                                     break
                                 else:
+                                    current_app.logger.error(
+                                        f"User not found after unique constraint violation: {validated_phone}"
+                                    )
                                     return {
                                         "success": False,
-                                        "message": "Failed to create user account",
+                                        "message": f"Failed to create user account: {str(e)}",
                                     }
                         else:
+                            # Log the actual error for debugging
+                            error_message = str(e)
+                            current_app.logger.error(
+                                f"Failed to create user: {error_message}"
+                            )
                             return {
                                 "success": False,
-                                "message": "Failed to create user account",
+                                "message": f"Failed to create user account: {error_message}",
                             }
                 else:
                     # Update existing user
@@ -178,12 +220,15 @@ class AuthService:
 
             except Exception as e:
                 db.session.rollback()
+                current_app.logger.exception(
+                    f"Error in verify_otp (attempt {attempt + 1}): {str(e)}"
+                )
                 if attempt < max_retries - 1:
                     continue  # Retry
                 else:
                     return {
                         "success": False,
-                        "message": "Failed to process verification",
+                        "message": f"Failed to process verification: {str(e)}",
                     }
 
         return {
