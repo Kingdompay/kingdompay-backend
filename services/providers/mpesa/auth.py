@@ -6,8 +6,20 @@ Handles access token generation for M-Pesa API requests
 import os
 import base64
 import requests
+import logging
 from typing import Optional
-from flask import current_app
+
+# Set up logger for standalone use
+logger = logging.getLogger(__name__)
+
+def get_logger():
+    """Get logger, preferring Flask's current_app.logger if available"""
+    try:
+        from flask import current_app
+        return current_app.logger
+    except RuntimeError:
+        # Not in Flask context, use standard logger
+        return logger
 
 
 class MpesaAuth:
@@ -39,7 +51,7 @@ class MpesaAuth:
                 return self._access_token
 
         if not self.consumer_key or not self.consumer_secret:
-            current_app.logger.error(
+            get_logger().error(
                 "M-Pesa credentials not configured: MPESA_CONSUMER_KEY and MPESA_CONSUMER_SECRET required"
             )
             return None
@@ -58,26 +70,26 @@ class MpesaAuth:
 
             data = response.json()
             access_token = data.get("access_token")
-            expires_in = data.get("expires_in", 3600)  # Default to 1 hour
+            expires_in = int(data.get("expires_in", 3600))  # Default to 1 hour, ensure it's an int
 
             if access_token:
                 self._access_token = access_token
                 import time
                 # Set expiration time (subtract 60 seconds buffer)
                 self._token_expires_at = time.time() + expires_in - 60
-                current_app.logger.info("M-Pesa access token obtained successfully")
+                get_logger().info("M-Pesa access token obtained successfully")
                 return access_token
             else:
-                current_app.logger.error(
+                get_logger().error(
                     f"M-Pesa auth failed: {data.get('error_description', 'Unknown error')}"
                 )
                 return None
 
         except requests.exceptions.RequestException as e:
-            current_app.logger.exception(f"Failed to get M-Pesa access token: {e}")
+            get_logger().exception(f"Failed to get M-Pesa access token: {e}")
             return None
         except Exception as e:
-            current_app.logger.exception(f"Unexpected error during M-Pesa auth: {e}")
+            get_logger().exception(f"Unexpected error during M-Pesa auth: {e}")
             return None
 
     def is_authenticated(self) -> bool:

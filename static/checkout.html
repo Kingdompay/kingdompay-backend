@@ -160,6 +160,11 @@
             color: #2c5282;
         }
 
+        .message.success {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
         .security-badge {
             text-align: center;
             margin-top: 30px;
@@ -227,7 +232,28 @@
         </div>
     </div>
 
+    <script src="/static/api-client.js"></script>
     <script>
+        // Debug: Log current location info
+        console.log('Current location:', {
+            hostname: window.location.hostname,
+            origin: window.location.origin,
+            href: window.location.href,
+            port: window.location.port
+        });
+        
+        // Warn if accessing via 0.0.0.0 (browsers can't make requests to it)
+        if (window.location.hostname === '0.0.0.0') {
+            const messageContainer = document.getElementById('message-container');
+            messageContainer.innerHTML = `
+                <div class="message error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Warning:</strong> You're accessing this page via <code>0.0.0.0</code> which may cause issues.
+                    <br>Please access via <a href="http://localhost:${window.location.port || '5000'}/checkout-demo" style="color: #667eea; text-decoration: underline;">localhost</a> or <a href="http://127.0.0.1:${window.location.port || '5000'}/checkout-demo" style="color: #667eea; text-decoration: underline;">127.0.0.1</a> instead.
+                </div>
+            `;
+        }
+        
         let selectedProvider = 'MPESA';
 
         function selectProvider(provider) {
@@ -248,38 +274,133 @@
             e.preventDefault();
             
             const submitBtn = document.getElementById('submit-btn');
+            const phone = document.getElementById('phone').value;
+            const amount = {{ amount }};
+            
+            // Validate phone number format for M-Pesa
+            if (selectedProvider === 'MPESA' && (!phone.startsWith('254') || phone.length !== 12)) {
+                document.getElementById('message-container').innerHTML = `
+                    <div class="message error">
+                        <i class="fas fa-exclamation-circle"></i>
+                        Please enter a valid M-Pesa phone number (format: 254712345678)
+                    </div>
+                `;
+                return;
+            }
+            
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
-            const formData = {
-                phone: document.getElementById('phone').value,
-                provider: selectedProvider,
-                amount: {{ amount }},
-                memo: '{{ memo }}',
-                {% if campaign %}
-                campaign_id: {{ campaign.id }},
-                {% endif %}
-                checkout_id: '{{ checkout_id }}'
-            };
-
             try {
-                const response = await fetch('/api/v1/checkout/initiate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
+                let data;
+                
+                if (selectedProvider === 'MPESA') {
+                    // Use M-Pesa STK Push API
+                    const accountReference = '{{ checkout_id }}' || 'PAY-' + Date.now();
+                    const transactionDesc = '{{ memo }}' || 'Payment';
+                    
+                    // Try using API client if available, otherwise use direct fetch
+                    let response;
+                    const token = typeof getAuthToken === 'function' ? getAuthToken() : localStorage.getItem('access_token');
+                    
+                    if (typeof MpesaAPI !== 'undefined' && MpesaAPI && MpesaAPI.initiateSTKPush) {
+                        try {
+                            data = await MpesaAPI.initiateSTKPush(
+                                phone,
+                                amount,
+                                accountReference,
+                                transactionDesc
+                            );
+                        } catch (apiError) {
+                            console.warn('API client failed, using direct fetch:', apiError);
+                            // Fall through to direct fetch
+                            response = null;
+                        }
+                    }
+                    
+                    // If API client didn't work or isn't available, use direct fetch
+                    if (!data && !response) {
+                        // Use relative URL to avoid hostname issues (works with localhost, 127.0.0.1, or 0.0.0.0)
+                        const apiUrl = '/api/v1/mpesa/pay';
+                        
+                        console.log('Making API request to:', apiUrl);
+                        console.log('Full URL will be:', window.location.origin + apiUrl);
+                        console.log('Request payload:', {
+                            phone: phone,
+                            amount: amount,
+                            account_reference: accountReference,
+                            transaction_desc: transactionDesc
+                        });
+                        
+                        response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(token && { 'Authorization': 'Bearer ' + token })
+                            },
+                            body: JSON.stringify({
+                                phone: phone,
+                                amount: amount,
+                                account_reference: accountReference,
+                                transaction_desc: transactionDesc
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            let errorData;
+                            try {
+                                errorData = await response.json();
+                            } catch (e) {
+                                errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+                            }
+                            throw new Error(errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        data = await response.json();
+                    }
+                } else {
+                    // Use checkout API for other providers
+                    const formData = {
+                        phone: phone,
+                        provider: selectedProvider,
+                        amount: amount,
+                        memo: '{{ memo }}',
+                        {% if campaign %}
+                        campaign_id: {{ campaign.id }},
+                        {% endif %}
+                        checkout_id: '{{ checkout_id }}'
+                    };
 
-                const data = await response.json();
+                    // Use relative URL to avoid hostname issues
+                    const checkoutUrl = '/api/v1/checkout/initiate';
+                    
+                    console.log('Making checkout request to:', checkoutUrl);
+                    console.log('Full URL will be:', window.location.origin + checkoutUrl);
+                    
+                    const response = await fetch(checkoutUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    data = await response.json();
+                }
 
                 const messageContainer = document.getElementById('message-container');
                 
                 if (data.success) {
                     messageContainer.innerHTML = `
-                        <div class="message info">
-                            <i class="fas fa-info-circle"></i>
-                            ${data.message || 'Payment initiated! Check your phone for the prompt.'}
+                        <div class="message success">
+                            <i class="fas fa-check-circle"></i>
+                            ${data.customer_message || data.message || 'Payment initiated! Check your phone for the prompt.'}
+                            ${data.checkout_request_id ? '<br><small>Request ID: ' + data.checkout_request_id + '</small>' : ''}
                         </div>
                     `;
                     submitBtn.innerHTML = '<i class="fas fa-check"></i> Payment Initiated';
@@ -287,17 +408,20 @@
                     messageContainer.innerHTML = `
                         <div class="message error">
                             <i class="fas fa-exclamation-circle"></i>
-                            ${data.message || 'Payment failed. Please try again.'}
+                            ${data.message || data.error || 'Payment failed. Please try again.'}
                         </div>
                     `;
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fas fa-lock"></i> Pay Securely';
                 }
             } catch (error) {
+                console.error('Payment error:', error);
+                const errorMessage = error.message || 'An unexpected error occurred. Please try again.';
                 document.getElementById('message-container').innerHTML = `
                     <div class="message error">
                         <i class="fas fa-exclamation-circle"></i>
-                        An error occurred. Please try again.
+                        ${errorMessage}
+                        ${error.status ? '<br><small>Status: ' + error.status + '</small>' : ''}
                     </div>
                 `;
                 submitBtn.disabled = false;

@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     FLASK_APP=app.py \
     FLASK_ENV=production \
-    PORT=5000
+    PORT=5001
 
 # Set work directory
 WORKDIR /app
@@ -45,7 +45,8 @@ EXPOSE $PORT
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=30s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:5000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-5001}/health || exit 1
 
 # Run database migrations and start the application
-CMD ["sh", "-c", "python3 -m flask db upgrade && gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload app:app"]
+# Note: Using 0.0.0.0 in Docker is required for container networking
+CMD ["sh", "-c", "python3 -m flask db upgrade && gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 4 --timeout 120 --max-requests 1000 --max-requests-jitter 100 --preload app:app"]

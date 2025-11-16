@@ -43,7 +43,17 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     mail.init_app(app)
     limiter.init_app(app)
-    CORS(app)
+    # Configure CORS to allow all origins for development
+    CORS(
+        app,
+        resources={
+            r"/*": {
+                "origins": "*",
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Request-ID"],
+            }
+        },
+    )
 
     # Initialize services
     app.ledger_service = LedgerService()
@@ -140,6 +150,22 @@ def create_app(config_class=Config):
             return render_template("campaigns.html")
         except:
             return "Campaigns demo template not found"
+
+    @app.route("/checkout-demo")
+    def checkout_demo():
+        """Checkout payment demo"""
+        try:
+            # Default values for demo
+            return render_template(
+                "checkout.html",
+                amount=100.00,
+                memo="Demo Payment",
+                checkout_id=f"DEMO-{uuid.uuid4().hex[:8].upper()}",
+                providers=["MPESA"],
+            )
+        except Exception as e:
+            app.logger.error(f"Checkout demo error: {e}")
+            return f"Checkout demo template not found: {str(e)}"
 
     # Health check endpoint
     @app.route("/health")
@@ -291,4 +317,6 @@ def create_app(config_class=Config):
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5040)
+    port = int(os.environ.get("PORT", 5001))
+    debug = os.environ.get("FLASK_ENV") == "development"
+    app.run(debug=debug, port=port)
