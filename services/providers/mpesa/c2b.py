@@ -6,8 +6,7 @@ Handles C2B URL registration, validation, and confirmation
 import os
 import requests
 from typing import Optional, Dict, Any
-from flask import current_app
-from .auth import MpesaAuth
+from .auth import MpesaAuth, get_logger
 
 
 class MpesaC2B:
@@ -77,7 +76,7 @@ class MpesaC2B:
         }
 
         try:
-            current_app.logger.info(
+            get_logger().info(
                 f"Registering C2B URLs: Validation={validation}, Confirmation={confirmation}"
             )
             response = requests.post(url, json=payload, headers=headers, timeout=30)
@@ -87,7 +86,7 @@ class MpesaC2B:
             response_code = data.get("ResponseCode")
 
             if response_code == "0":
-                current_app.logger.info("C2B URLs registered successfully")
+                get_logger().info("C2B URLs registered successfully")
                 return {
                     "success": True,
                     "response_code": response_code,
@@ -95,7 +94,7 @@ class MpesaC2B:
                 }
             else:
                 error_message = data.get("ResponseDescription", "Unknown error")
-                current_app.logger.error(
+                get_logger().error(
                     f"C2B URL registration failed: {error_message}"
                 )
                 return {
@@ -111,15 +110,15 @@ class MpesaC2B:
                 error_msg = error_data.get("errorMessage", error_msg)
             except:
                 pass
-            current_app.logger.exception(f"C2B URL registration HTTP error: {error_msg}")
+            get_logger().exception(f"C2B URL registration HTTP error: {error_msg}")
             return {"success": False, "message": error_msg}
 
         except requests.exceptions.RequestException as e:
-            current_app.logger.exception(f"C2B URL registration request failed: {e}")
+            get_logger().exception(f"C2B URL registration request failed: {e}")
             return {"success": False, "message": f"Request failed: {str(e)}"}
 
         except Exception as e:
-            current_app.logger.exception(f"Unexpected error during C2B URL registration: {e}")
+            get_logger().exception(f"Unexpected error during C2B URL registration: {e}")
             return {"success": False, "message": f"Unexpected error: {str(e)}"}
 
     def simulate_c2b_payment(
@@ -176,7 +175,7 @@ class MpesaC2B:
         }
 
         try:
-            current_app.logger.info(
+            get_logger().info(
                 f"Simulating C2B payment: {phone_clean}, Amount: {amount}, Ref: {bill_reference}"
             )
             response = requests.post(url, json=payload, headers=headers, timeout=30)
@@ -186,7 +185,7 @@ class MpesaC2B:
             response_code = data.get("ResponseCode")
 
             if response_code == "0":
-                current_app.logger.info("C2B payment simulated successfully")
+                get_logger().info("C2B payment simulated successfully")
                 return {
                     "success": True,
                     "response_code": response_code,
@@ -196,7 +195,7 @@ class MpesaC2B:
                 }
             else:
                 error_message = data.get("ResponseDescription", "Unknown error")
-                current_app.logger.error(f"C2B simulation failed: {error_message}")
+                get_logger().error(f"C2B simulation failed: {error_message}")
                 return {
                     "success": False,
                     "message": error_message,
@@ -204,7 +203,7 @@ class MpesaC2B:
                 }
 
         except Exception as e:
-            current_app.logger.exception(f"C2B simulation failed: {e}")
+            get_logger().exception(f"C2B simulation failed: {e}")
             return {"success": False, "message": f"Simulation failed: {str(e)}"}
 
     @staticmethod

@@ -4,7 +4,7 @@ Handles STK Push and C2B payment endpoints
 """
 
 from flask import request, jsonify, current_app
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from routes import api_v1_bp
 from services.providers.mpesa.stk_push import MpesaSTKPush
 from services.providers.mpesa.c2b import MpesaC2B
@@ -15,13 +15,26 @@ stk_push_service = MpesaSTKPush()
 c2b_service = MpesaC2B()
 
 
-@api_v1_bp.route("/mpesa/pay", methods=["POST"])
-@jwt_required()
+@api_v1_bp.route("/mpesa/status", methods=["GET"])
+def mpesa_status():
+    """Check M-Pesa integration status"""
+    return jsonify({
+        "success": True,
+        "message": "M-Pesa routes are active",
+        "endpoints": {
+            "stk_push": "/api/v1/mpesa/pay",
+            "callback": "/api/v1/mpesa/callback"
+        }
+    }), 200
+
+
+@api_v1_bp.route("/mpesa/pay", methods=["POST", "OPTIONS"])
+@jwt_required(optional=True)
 def initiate_stk_push():
     """
     Initiate STK Push payment
     POST /api/v1/mpesa/pay
-    
+
     Request body:
     {
         "phone": "254712345678",
@@ -29,7 +42,7 @@ def initiate_stk_push():
         "account_reference": "PAY-12345",
         "transaction_desc": "Payment for services" (optional)
     }
-    
+
     Returns:
     {
         "success": true,
@@ -38,83 +51,126 @@ def initiate_stk_push():
         "merchant_request_id": "12345-67890-1"
     }
     """
+    # Handle CORS preflight
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+    
     try:
         data = request.get_json() or {}
-        
+
         # Validate required fields
         phone = data.get("phone")
         amount = data.get("amount")
         account_reference = data.get("account_reference")
         transaction_desc = data.get("transaction_desc", "Payment")
-        
+
         if not phone:
-            return jsonify({
-                "error": True,
-                "message": "Phone number is required",
-                "code": "MISSING_PHONE"
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "error": True,
+                        "message": "Phone number is required",
+                        "code": "MISSING_PHONE",
+                    }
+                ),
+                400,
+            )
+
         if not amount:
-            return jsonify({
-                "error": True,
-                "message": "Amount is required",
-                "code": "MISSING_AMOUNT"
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "error": True,
+                        "message": "Amount is required",
+                        "code": "MISSING_AMOUNT",
+                    }
+                ),
+                400,
+            )
+
         if not account_reference:
-            return jsonify({
-                "error": True,
-                "message": "Account reference is required",
-                "code": "MISSING_REFERENCE"
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "error": True,
+                        "message": "Account reference is required",
+                        "code": "MISSING_REFERENCE",
+                    }
+                ),
+                400,
+            )
+
         # Validate and convert amount
         try:
             amount_decimal = Decimal(str(amount))
             if amount_decimal <= 0:
-                return jsonify({
-                    "error": True,
-                    "message": "Amount must be greater than 0",
-                    "code": "INVALID_AMOUNT"
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "error": True,
+                            "message": "Amount must be greater than 0",
+                            "code": "INVALID_AMOUNT",
+                        }
+                    ),
+                    400,
+                )
         except (InvalidOperation, ValueError):
-            return jsonify({
-                "error": True,
-                "message": "Invalid amount format",
-                "code": "INVALID_AMOUNT"
-            }), 400
-        
+            return (
+                jsonify(
+                    {
+                        "error": True,
+                        "message": "Invalid amount format",
+                        "code": "INVALID_AMOUNT",
+                    }
+                ),
+                400,
+            )
+
         # Initiate STK Push
         result = stk_push_service.initiate_stk_push(
             phone=phone,
             amount=amount_decimal,
             account_reference=account_reference,
-            transaction_desc=transaction_desc
+            transaction_desc=transaction_desc,
         )
-        
+
         if result.get("success"):
-            return jsonify({
-                "success": True,
-                "checkout_request_id": result.get("checkout_request_id"),
-                "customer_message": result.get("customer_message"),
-                "merchant_request_id": result.get("merchant_request_id"),
-                "response_code": result.get("response_code")
-            }), 200
+            return (
+                jsonify(
+                    {
+                        "success": True,
+                        "checkout_request_id": result.get("checkout_request_id"),
+                        "customer_message": result.get("customer_message"),
+                        "merchant_request_id": result.get("merchant_request_id"),
+                        "response_code": result.get("response_code"),
+                    }
+                ),
+                200,
+            )
         else:
-            return jsonify({
+            error_response = {
                 "error": True,
                 "message": result.get("message", "STK Push initiation failed"),
                 "code": "STK_PUSH_FAILED",
-                "response_code": result.get("response_code")
-            }), 400
-            
+                "response_code": result.get("response_code"),
+            }
+            # Include error details if available for debugging
+            if result.get("error_details"):
+                error_response["error_details"] = result.get("error_details")
+            return jsonify(error_response), 400
+
     except Exception as e:
         current_app.logger.exception("Error initiating STK Push")
-        return jsonify({
-            "error": True,
-            "message": "An unexpected error occurred",
-            "code": "INTERNAL_ERROR"
-        }), 500
+        return (
+            jsonify(
+                {
+                    "error": True,
+                    "message": "An unexpected error occurred",
+                    "code": "INTERNAL_ERROR",
+                }
+            ),
+            500,
+        )
 
 
 @api_v1_bp.route("/mpesa/callback", methods=["POST"])
@@ -122,44 +178,46 @@ def handle_stk_callback():
     """
     Handle STK Push callback from M-Pesa
     POST /api/v1/mpesa/callback
-    
+
     This endpoint receives callbacks from M-Pesa when a customer
     completes or cancels an STK Push payment.
     """
     try:
         payload = request.get_json() or {}
         current_app.logger.info(f"M-Pesa STK callback received: {payload}")
-        
+
         # Extract callback data
         body = payload.get("Body", {})
         stk_callback = body.get("stkCallback", {})
         checkout_request_id = body.get("CheckoutRequestID")
-        
+
         if not stk_callback:
-            current_app.logger.warning("Invalid STK callback format: missing stkCallback")
+            current_app.logger.warning(
+                "Invalid STK callback format: missing stkCallback"
+            )
             # Return 200 to prevent M-Pesa from retrying
             return jsonify({"ResultCode": 0, "ResultDesc": "Accepted"}), 200
-        
+
         result_code = stk_callback.get("ResultCode")
         result_desc = stk_callback.get("ResultDesc")
         merchant_request_id = stk_callback.get("MerchantRequestID")
-        
+
         # Log callback details
         current_app.logger.info(
             f"STK Callback - CheckoutRequestID: {checkout_request_id}, "
             f"ResultCode: {result_code}, ResultDesc: {result_desc}"
         )
-        
+
         # Extract transaction details if successful
         if result_code == 0:
             callback_metadata = stk_callback.get("CallbackMetadata", {})
             items = callback_metadata.get("Item", [])
-            
+
             receipt_number = None
             amount = None
             phone = None
             transaction_date = None
-            
+
             for item in items:
                 name = item.get("Name")
                 value = item.get("Value")
@@ -171,118 +229,107 @@ def handle_stk_callback():
                     phone = value
                 elif name == "TransactionDate":
                     transaction_date = value
-            
+
             current_app.logger.info(
                 f"STK Push successful - Receipt: {receipt_number}, "
                 f"Amount: {amount}, Phone: {phone}"
             )
-        
+
         # Always return success to M-Pesa to acknowledge receipt
         # Actual payment processing should be handled by webhook service
-        return jsonify({
-            "ResultCode": 0,
-            "ResultDesc": "Callback received successfully"
-        }), 200
-        
+        return (
+            jsonify({"ResultCode": 0, "ResultDesc": "Callback received successfully"}),
+            200,
+        )
+
     except Exception as e:
         current_app.logger.exception("Error processing STK callback")
         # Still return success to prevent retries
-        return jsonify({
-            "ResultCode": 0,
-            "ResultDesc": "Callback received"
-        }), 200
+        return jsonify({"ResultCode": 0, "ResultDesc": "Callback received"}), 200
 
 
-@api_v1_bp.route("/mpesa/confirmation", methods=["POST"])
+@api_v1_bp.route("/payments/c2b/confirmation", methods=["POST"])
 def handle_c2b_confirmation():
     """
     Handle C2B confirmation callback from M-Pesa
-    POST /api/v1/mpesa/confirmation
-    
+    POST /api/v1/payments/c2b/confirmation
+
     This endpoint receives confirmation callbacks from M-Pesa when
     a C2B payment is completed.
     """
     try:
         payload = request.get_json() or {}
         current_app.logger.info(f"M-Pesa C2B confirmation received: {payload}")
-        
+
         # Parse confirmation data
         confirmation_data = c2b_service.parse_confirmation_callback(payload)
-        
+
         trans_id = confirmation_data.get("trans_id")
         trans_amount = confirmation_data.get("trans_amount")
         msisdn = confirmation_data.get("msisdn")
         bill_ref = confirmation_data.get("bill_ref_number")
-        
+
         current_app.logger.info(
             f"C2B Confirmation - TransID: {trans_id}, "
             f"Amount: {trans_amount}, MSISDN: {msisdn}, BillRef: {bill_ref}"
         )
-        
+
         # Process the confirmation (e.g., update payment status, credit wallet)
         # This should integrate with your payment processing logic
-        
+
         # Return success to M-Pesa
-        return jsonify({
-            "ResultCode": 0,
-            "ResultDesc": "Confirmation received successfully"
-        }), 200
-        
+        return (
+            jsonify(
+                {"ResultCode": 0, "ResultDesc": "Confirmation received successfully"}
+            ),
+            200,
+        )
+
     except Exception as e:
         current_app.logger.exception("Error processing C2B confirmation")
-        return jsonify({
-            "ResultCode": 0,
-            "ResultDesc": "Confirmation received"
-        }), 200
+        return jsonify({"ResultCode": 0, "ResultDesc": "Confirmation received"}), 200
 
 
-@api_v1_bp.route("/mpesa/validation", methods=["POST"])
+@api_v1_bp.route("/payments/c2b/validation", methods=["POST"])
 def handle_c2b_validation():
     """
     Handle C2B validation callback from M-Pesa
-    POST /api/v1/mpesa/validation
-    
+    POST /api/v1/payments/c2b/validation
+
     This endpoint receives validation callbacks from M-Pesa before
     processing a C2B payment. You can validate the transaction here.
     """
     try:
         payload = request.get_json() or {}
         current_app.logger.info(f"M-Pesa C2B validation received: {payload}")
-        
+
         # Parse validation data
         validation_data = c2b_service.parse_validation_callback(payload)
-        
+
         trans_id = validation_data.get("trans_id")
         trans_amount = validation_data.get("trans_amount")
         msisdn = validation_data.get("msisdn")
         bill_ref = validation_data.get("bill_ref_number")
-        
+
         current_app.logger.info(
             f"C2B Validation - TransID: {trans_id}, "
             f"Amount: {trans_amount}, MSISDN: {msisdn}, BillRef: {bill_ref}"
         )
-        
+
         # Validate the transaction
         # Return ResultCode 0 to accept, or non-zero to reject
         # For now, accept all validations
-        validation_result = {
-            "ResultCode": 0,
-            "ResultDesc": "Accepted"
-        }
-        
+        validation_result = {"ResultCode": 0, "ResultDesc": "Accepted"}
+
         # You can add custom validation logic here:
         # - Check if bill_ref exists in your system
         # - Validate amount
         # - Check customer account status
         # etc.
-        
+
         return jsonify(validation_result), 200
-        
+
     except Exception as e:
         current_app.logger.exception("Error processing C2B validation")
         # Reject on error to be safe
-        return jsonify({
-            "ResultCode": 1,
-            "ResultDesc": "Validation error"
-        }), 200
-
+        return jsonify({"ResultCode": 1, "ResultDesc": "Validation error"}), 200

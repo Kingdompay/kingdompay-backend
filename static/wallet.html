@@ -343,6 +343,25 @@
         color: #2a4365;
       }
 
+      .message {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        text-align: center;
+      }
+
+      .message.success {
+        background: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #9ae6b4;
+      }
+
+      .message.error {
+        background: #fed7d7;
+        color: #742a2a;
+        border: 1px solid #fc8181;
+      }
+
       .modal {
         display: none;
         position: fixed;
@@ -457,6 +476,10 @@
           <a href="#" class="action-btn" onclick="openModal('depositModal')">
             <i class="fas fa-plus"></i>
             Deposit
+          </a>
+          <a href="#" class="action-btn" onclick="openModal('mpesaModal')">
+            <i class="fas fa-mobile-alt"></i>
+            M-Pesa Pay
           </a>
           <a href="#" class="action-btn" onclick="openModal('withdrawModal')">
             <i class="fas fa-minus"></i>
@@ -709,6 +732,68 @@
       </div>
     </div>
 
+    <!-- M-Pesa Payment Modal -->
+    <div id="mpesaModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title">
+            <i class="fas fa-mobile-alt"></i> M-Pesa STK Push Payment
+          </div>
+          <span class="close" onclick="closeModal('mpesaModal')"
+            >&times;</span
+          >
+        </div>
+        <div id="mpesaMessage" style="display: none; padding: 15px; border-radius: 8px; margin-bottom: 20px;"></div>
+        <div class="form-group">
+          <label for="mpesaPhone">Phone Number</label>
+          <input
+            type="tel"
+            id="mpesaPhone"
+            placeholder="254712345678"
+            required
+          />
+          <small style="color: #718096; font-size: 0.85rem;">
+            Enter your M-Pesa registered phone number
+          </small>
+        </div>
+        <div class="form-group">
+          <label for="mpesaAmount">Amount (KES)</label>
+          <input
+            type="number"
+            id="mpesaAmount"
+            placeholder="0.00"
+            min="1"
+            step="0.01"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="mpesaReference">Account Reference</label>
+          <input
+            type="text"
+            id="mpesaReference"
+            placeholder="PAY-12345"
+            required
+          />
+          <small style="color: #718096; font-size: 0.85rem;">
+            Reference for this payment
+          </small>
+        </div>
+        <div class="form-group">
+          <label for="mpesaDescription">Transaction Description</label>
+          <input
+            type="text"
+            id="mpesaDescription"
+            placeholder="Payment for services"
+            value="Wallet Deposit"
+          />
+        </div>
+        <button class="btn btn-primary" onclick="initiateMpesaPayment()" id="mpesaSubmitBtn">
+          <i class="fas fa-mobile-alt"></i> Initiate STK Push
+        </button>
+      </div>
+    </div>
+
     <script src="/static/api-client.js"></script>
     <script>
       // Load wallet data on page load
@@ -819,6 +904,87 @@
         );
         closeModal("withdrawModal");
         simulateTransaction("withdraw", amount, "Withdrawal via " + method);
+      }
+
+      async function initiateMpesaPayment() {
+        if (!requireAuth()) return;
+
+        const phone = document.getElementById("mpesaPhone").value;
+        const amount = document.getElementById("mpesaAmount").value;
+        const accountReference = document.getElementById("mpesaReference").value;
+        const transactionDesc = document.getElementById("mpesaDescription").value || "Wallet Deposit";
+
+        if (!phone || !amount || !accountReference) {
+          showMpesaMessage("Please fill in all required fields", "error");
+          return;
+        }
+
+        // Validate phone number format (should start with 254)
+        if (!phone.startsWith("254") || phone.length !== 12) {
+          showMpesaMessage("Please enter a valid phone number (format: 254712345678)", "error");
+          return;
+        }
+
+        const submitBtn = document.getElementById("mpesaSubmitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+        try {
+          const response = await MpesaAPI.initiateSTKPush(
+            phone,
+            parseFloat(amount),
+            accountReference,
+            transactionDesc
+          );
+
+          if (response.success) {
+            showMpesaMessage(
+              `✅ STK Push initiated successfully!<br>` +
+              `Check your phone for the payment prompt.<br>` +
+              `Request ID: ${response.checkout_request_id || "N/A"}`,
+              "success"
+            );
+            submitBtn.innerHTML = '<i class="fas fa-check"></i> Payment Initiated';
+            
+            // Clear form after successful initiation
+            setTimeout(() => {
+              document.getElementById("mpesaPhone").value = "";
+              document.getElementById("mpesaAmount").value = "";
+              document.getElementById("mpesaReference").value = "";
+              document.getElementById("mpesaDescription").value = "Wallet Deposit";
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Initiate STK Push';
+            }, 5000);
+          } else {
+            showMpesaMessage(
+              `❌ Payment failed: ${response.message || "Unknown error"}`,
+              "error"
+            );
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Initiate STK Push';
+          }
+        } catch (error) {
+          showMpesaMessage(
+            `❌ Error: ${error.message || "Failed to initiate payment"}`,
+            "error"
+          );
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fas fa-mobile-alt"></i> Initiate STK Push';
+        }
+      }
+
+      function showMpesaMessage(message, type) {
+        const messageDiv = document.getElementById("mpesaMessage");
+        messageDiv.style.display = "block";
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerHTML = message;
+        
+        // Auto-hide after 10 seconds for success messages
+        if (type === "success") {
+          setTimeout(() => {
+            messageDiv.style.display = "none";
+          }, 10000);
+        }
       }
 
       function simulateTransaction(type, amount, description) {

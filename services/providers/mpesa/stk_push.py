@@ -7,11 +7,11 @@ import os
 import json
 import base64
 import requests
+import logging
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from decimal import Decimal
-from flask import current_app
-from .auth import MpesaAuth
+from .auth import MpesaAuth, get_logger
 
 
 class MpesaSTKPush:
@@ -102,7 +102,7 @@ class MpesaSTKPush:
         try:
             phone_formatted = self._format_phone_number(phone)
         except Exception as e:
-            current_app.logger.error(f"Invalid phone number format: {phone}")
+            get_logger().error(f"Invalid phone number format: {phone}")
             return {
                 "success": False,
                 "message": f"Invalid phone number format: {str(e)}",
@@ -134,11 +134,32 @@ class MpesaSTKPush:
         }
 
         try:
-            current_app.logger.info(
+            get_logger().info(
                 f"Initiating STK Push: {phone_formatted}, Amount: {amount}, Ref: {account_reference}"
             )
+            get_logger().debug(f"STK Push payload: {json.dumps(payload, indent=2)}")
             response = requests.post(url, json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
+            
+            # Log response for debugging
+            get_logger().debug(f"STK Push response status: {response.status_code}")
+            get_logger().debug(f"STK Push response: {response.text}")
+
+            # Check HTTP status
+            if response.status_code != 200:
+                error_data = {}
+                try:
+                    error_data = response.json()
+                except:
+                    error_data = {"errorMessage": response.text}
+                
+                error_msg = error_data.get("errorMessage") or error_data.get("error_description") or f"HTTP {response.status_code}"
+                get_logger().error(f"STK Push HTTP error {response.status_code}: {error_msg}")
+                return {
+                    "success": False,
+                    "message": f"M-Pesa API error: {response.status_code} - {error_msg}",
+                    "response_code": str(response.status_code),
+                    "error_details": error_data
+                }
 
             data = response.json()
 
@@ -147,7 +168,7 @@ class MpesaSTKPush:
             if response_code == "0":
                 checkout_request_id = data.get("CheckoutRequestID")
                 customer_message = data.get("CustomerMessage")
-                current_app.logger.info(
+                get_logger().info(
                     f"STK Push initiated successfully. CheckoutRequestID: {checkout_request_id}"
                 )
                 return {
@@ -159,7 +180,7 @@ class MpesaSTKPush:
                 }
             else:
                 error_message = data.get("ResponseDescription", "Unknown error")
-                current_app.logger.error(
+                get_logger().error(
                     f"STK Push failed: {error_message} (Code: {response_code})"
                 )
                 return {
@@ -172,18 +193,19 @@ class MpesaSTKPush:
             error_msg = f"HTTP error: {e.response.status_code}"
             try:
                 error_data = e.response.json()
-                error_msg = error_data.get("errorMessage", error_msg)
+                error_msg = error_data.get("errorMessage") or error_data.get("error_description") or error_msg
+                get_logger().error(f"STK Push HTTP error: {error_msg}")
+                get_logger().error(f"Error details: {json.dumps(error_data, indent=2)}")
             except:
-                pass
-            current_app.logger.exception(f"STK Push HTTP error: {error_msg}")
-            return {"success": False, "message": error_msg}
+                get_logger().error(f"STK Push HTTP error: {error_msg}")
+            return {"success": False, "message": f"M-Pesa API error: {e.response.status_code} - {error_msg}"}
 
         except requests.exceptions.RequestException as e:
-            current_app.logger.exception(f"STK Push request failed: {e}")
+            get_logger().exception(f"STK Push request failed: {e}")
             return {"success": False, "message": f"Request failed: {str(e)}"}
 
         except Exception as e:
-            current_app.logger.exception(f"Unexpected error during STK Push: {e}")
+            get_logger().exception(f"Unexpected error during STK Push: {e}")
             return {"success": False, "message": f"Unexpected error: {str(e)}"}
 
     def query_stk_status(self, checkout_request_id: str) -> Dict[str, Any]:
@@ -234,6 +256,6 @@ class MpesaSTKPush:
             }
 
         except Exception as e:
-            current_app.logger.exception(f"STK status query failed: {e}")
+            get_logger().exception(f"STK status query failed: {e}")
             return {"success": False, "message": f"Query failed: {str(e)}"}
 

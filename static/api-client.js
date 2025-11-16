@@ -3,8 +3,16 @@
  * Centralized API client for frontend templates
  */
 
+// Helper function to get the correct API base URL
+// Use relative URLs to avoid hostname issues
+function getApiBaseURL() {
+  // Use relative path - this works regardless of hostname (localhost, 127.0.0.1, or 0.0.0.0)
+  return '/api/v1';
+}
+
 const API_CONFIG = {
-  baseURL: "http://localhost:5001/api/v1",
+  // Use relative path to avoid hostname issues
+  baseURL: '/api/v1',
   timeout: 10000,
 };
 
@@ -44,7 +52,10 @@ async function apiCall(endpoint, options = {}) {
   }
 
   try {
-    const response = await fetch(`${API_CONFIG.baseURL}${endpoint}`, config);
+    // Ensure endpoint starts with / if baseURL is relative
+    const fullEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${API_CONFIG.baseURL}${fullEndpoint}`;
+    const response = await fetch(url, config);
     const data = await response.json();
 
     if (!response.ok) {
@@ -258,6 +269,26 @@ const CampaignAPI = {
         description: description,
       },
     });
+  },
+};
+
+// M-Pesa functions
+const MpesaAPI = {
+  async initiateSTKPush(phone, amount, accountReference, transactionDesc = "Payment") {
+    return await apiCall("/mpesa/pay", {
+      method: "POST",
+      body: {
+        phone: phone,
+        amount: amount,
+        account_reference: accountReference,
+        transaction_desc: transactionDesc,
+      },
+    });
+  },
+
+  async checkPaymentStatus(checkoutRequestId) {
+    // Note: This endpoint may need to be implemented in the backend
+    return await apiCall(`/mpesa/status/${checkoutRequestId}`);
   },
 };
 
