@@ -645,14 +645,28 @@
           document.getElementById("otp-status").style.display = "block";
           document.getElementById("otp-status").innerHTML =
             '<i class="fas fa-spinner fa-spin"></i> Sending OTP...';
+          document.getElementById("otp-status").classList.remove("status-success", "status-error");
 
+          console.log("Requesting OTP for phone:", phone);
           const response = await AuthAPI.requestOTP(phone);
+          console.log("OTP request response:", response);
+
+          if (!response.success) {
+            throw new Error(response.message || "Failed to send OTP");
+          }
 
           // Show success
           document.getElementById("otp-display").style.display = "block";
           document.getElementById("otp-status").innerHTML =
             '<i class="fas fa-check-circle"></i> Verification code sent successfully!';
           document.getElementById("otp-status").classList.add("status-success");
+          document.getElementById("otp-status").classList.remove("status-error");
+
+          // If OTP is included in response (development mode), show it
+          if (response.otp_code) {
+            console.log("OTP Code (dev mode):", response.otp_code);
+            document.getElementById("otp").value = response.otp_code;
+          }
 
           // Move to next step after 2 seconds
           setTimeout(() => {
@@ -668,9 +682,13 @@
               .scrollIntoView({ behavior: "smooth" });
           }, 2000);
         } catch (error) {
-          showError(
-            "Failed to send OTP: " + (error.message || "Unknown error")
-          );
+          console.error("OTP request error:", error);
+          const errorMessage = error.message || error.data?.message || "Unknown error";
+          showError("Failed to send OTP: " + errorMessage);
+          document.getElementById("otp-status").innerHTML =
+            '<i class="fas fa-exclamation-circle"></i> ' + errorMessage;
+          document.getElementById("otp-status").classList.add("status-error");
+          document.getElementById("otp-status").classList.remove("status-success");
         }
       }
 

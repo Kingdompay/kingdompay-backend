@@ -8,11 +8,13 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from routes import api_v1_bp
 from services.providers.mpesa.stk_push import MpesaSTKPush
 from services.providers.mpesa.c2b import MpesaC2B
+from services.providers.mpesa.b2c import MpesaB2C
 from decimal import Decimal, InvalidOperation
 
 
 stk_push_service = MpesaSTKPush()
 c2b_service = MpesaC2B()
+b2c_service = MpesaB2C()
 
 
 @api_v1_bp.route("/mpesa/status", methods=["GET"])
@@ -333,3 +335,74 @@ def handle_c2b_validation():
         current_app.logger.exception("Error processing C2B validation")
         # Reject on error to be safe
         return jsonify({"ResultCode": 1, "ResultDesc": "Validation error"}), 200
+
+
+@api_v1_bp.route("/mpesa/b2c/result", methods=["POST"])
+def handle_b2c_result():
+    """
+    Handle B2C result callback from M-Pesa
+    POST /api/v1/mpesa/b2c/result
+
+    This endpoint receives result callbacks from M-Pesa when
+    a B2C payout is completed.
+    """
+    try:
+        payload = request.get_json() or {}
+        current_app.logger.info(f"M-Pesa B2C result received: {payload}")
+
+        # Parse result data
+        result_data = b2c_service.parse_result_callback(payload)
+
+        result_code = result_data.get("result_code")
+        transaction_id = result_data.get("transaction_id")
+        transaction_receipt = result_data.get("transaction_receipt")
+        transaction_amount = result_data.get("transaction_amount")
+        conversation_id = result_data.get("conversation_id")
+
+        current_app.logger.info(
+            f"B2C Result - ResultCode: {result_code}, "
+            f"TransactionID: {transaction_id}, Receipt: {transaction_receipt}, "
+            f"Amount: {transaction_amount}, ConversationID: {conversation_id}"
+        )
+
+        # The webhook handler at /api/v1/webhooks/provider/MPESA will process this
+        # We just acknowledge receipt here
+        return jsonify({"ResultCode": 0, "ResultDesc": "Result received successfully"}), 200
+
+    except Exception as e:
+        current_app.logger.exception("Error processing B2C result")
+        # Still return success to prevent retries
+        return jsonify({"ResultCode": 0, "ResultDesc": "Result received"}), 200
+
+
+@api_v1_bp.route("/mpesa/b2c/queue-timeout", methods=["POST"])
+def handle_b2c_queue_timeout():
+    """
+    Handle B2C queue timeout callback from M-Pesa
+    POST /api/v1/mpesa/b2c/queue-timeout
+
+    This endpoint receives timeout callbacks from M-Pesa when
+    a B2C payout request times out in the queue.
+    """
+    try:
+        payload = request.get_json() or {}
+        current_app.logger.info(f"M-Pesa B2C queue timeout received: {payload}")
+
+        # Parse timeout data
+        timeout_data = b2c_service.parse_queue_timeout_callback(payload)
+
+        result_code = timeout_data.get("result_code")
+        transaction_id = timeout_data.get("transaction_id")
+        conversation_id = timeout_data.get("conversation_id")
+
+        current_app.logger.warning(
+            f"B2C Queue Timeout - ResultCode: {result_code}, "
+            f"TransactionID: {transaction_id}, ConversationID: {conversation_id}"
+        )
+
+        # Acknowledge receipt
+        return jsonify({"ResultCode": 0, "ResultDesc": "Timeout received"}), 200
+
+    except Exception as e:
+        current_app.logger.exception("Error processing B2C queue timeout")
+        return jsonify({"ResultCode": 0, "ResultDesc": "Timeout received"}), 200

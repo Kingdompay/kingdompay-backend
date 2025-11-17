@@ -23,7 +23,12 @@ The M-Pesa integration is organized into modular components:
    - Validation and confirmation callback parsing
    - C2B payment simulation (for sandbox testing)
 
-4. **`services/providers/mpesa.py`** - Main adapter
+4. **`services/providers/mpesa/b2c.py`** - Business to Customer (B2C) payouts
+   - `MpesaB2C` class for initiating B2C payouts
+   - Result and queue timeout callback parsing
+   - Supports SalaryPayment, BusinessPayment, and PromotionPayment
+
+5. **`services/providers/mpesa.py`** - Main adapter
    - `MpesaAdapter` class implementing `ProviderAdapter` interface
    - Integrates with `ProviderService` for unified payment processing
    - Handles webhook parsing for STK and C2B callbacks
@@ -54,6 +59,12 @@ MPESA_CALLBACK_URL=https://your-domain.com/api/v1/mpesa/callback
 MPESA_C2B_VALIDATION_URL=https://your-domain.com/api/v1/mpesa/validation
 MPESA_C2B_CONFIRMATION_URL=https://your-domain.com/api/v1/mpesa/confirmation
 MPESA_C2B_RESPONSE_TYPE=Completed
+
+# B2C Configuration (for payouts)
+MPESA_INITIATOR_NAME=your_initiator_name
+MPESA_SECURITY_CREDENTIAL=your_encrypted_security_credential
+MPESA_B2C_QUEUE_TIMEOUT_URL=https://your-domain.com/api/v1/mpesa/b2c/queue-timeout
+MPESA_B2C_RESULT_URL=https://your-domain.com/api/v1/mpesa/b2c/result
 ```
 
 ## Usage
@@ -196,9 +207,41 @@ ngrok http 5000
 4. **Rate limiting** - Consider rate limiting on payment endpoints
 5. **Idempotency** - Use unique references to prevent duplicate payments
 
+### B2C Payout
+
+**Initiate a payout:**
+
+```bash
+POST /api/v1/payouts
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+
+{
+  "from_wallet": 123,
+  "method": "MOMO",
+  "destination": "254712345678",
+  "amount": 1000.00,
+  "currency": "KES",
+  "provider": "MPESA",
+  "description": "Payment for services"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "payment_id": 456,
+  "status": "PENDING",
+  "provider_ref": "abc123-def456-ghi789"
+}
+```
+
+The payout will be processed via M-Pesa B2C API. The result will be sent to the B2C result callback URL.
+
 ## Next Steps
 
-- [ ] Implement B2C (Business to Customer) payouts
+- [x] Implement B2C (Business to Customer) payouts
 - [ ] Add transaction status query API
 - [ ] Implement account balance API
 - [ ] Add callback signature validation

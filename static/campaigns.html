@@ -38,6 +38,19 @@
         text-align: center;
       }
 
+      .nav-menu {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+
       .nav-link {
         display: inline-flex;
         align-items: center;
@@ -47,6 +60,11 @@
         border-radius: 15px;
         text-decoration: none;
         font-weight: 600;
+        transition: all 0.3s ease;
+      }
+
+      .nav-link:hover {
+        transform: translateY(-3px);
       }
 
       .campaign-grid {
@@ -107,6 +125,99 @@
         transition: width 0.5s ease;
       }
 
+      .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        transition: all 0.3s ease;
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #718096;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(5px);
+      }
+
+      .modal-content {
+        background: white;
+        margin: 5% auto;
+        padding: 30px;
+        border-radius: 20px;
+        max-width: 500px;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #2d3748;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #e2e8f0;
+        border-radius: 10px;
+        font-size: 1rem;
+        transition: border-color 0.3s ease;
+      }
+
+      .form-group input:focus,
+      .form-group select:focus,
+      .form-group textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .message {
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+      }
+
+      .message.success {
+        background: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #9ae6b4;
+      }
+
+      .message.error {
+        background: #fed7d7;
+        color: #742a2a;
+        border: 1px solid #fc8181;
+      }
+
       @media (max-width: 768px) {
         .campaign-grid {
           grid-template-columns: 1fr;
@@ -121,6 +232,26 @@
         <p>Support your communities through campaigns</p>
       </div>
 
+      <div class="nav-menu">
+        <a href="/static/index.html" class="nav-link">
+          <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="/static/communities.html" class="nav-link">
+          <i class="fas fa-users"></i> Communities
+        </a>
+        <a href="/static/wallet.html" class="nav-link">
+          <i class="fas fa-wallet"></i> Wallet
+        </a>
+      </div>
+
+      <div style="text-align: center; margin-bottom: 30px;">
+        <button class="btn" onclick="openCreateModal()" style="max-width: 300px; margin: 0 auto;">
+          <i class="fas fa-plus"></i> Create Campaign
+        </button>
+      </div>
+
+      <div id="message" class="message" style="display: none"></div>
+
       <div class="campaign-grid" id="campaignsGrid">
         <div style="text-align: center; padding: 40px; color: #718096">
           <i class="fas fa-spinner fa-spin" style="font-size: 3rem"></i>
@@ -129,75 +260,213 @@
       </div>
     </div>
 
+    <!-- Create Campaign Modal -->
+    <div id="createModal" class="modal">
+      <div class="modal-content">
+        <h2 style="margin-bottom: 20px;">
+          <i class="fas fa-plus"></i> Create Campaign
+        </h2>
+        <div id="createMessage" class="message" style="display: none"></div>
+        <div class="form-group">
+          <label for="campaignTitle">Campaign Title *</label>
+          <input
+            type="text"
+            id="campaignTitle"
+            placeholder="e.g., Building Fund Drive"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="campaignType">Campaign Type *</label>
+          <select id="campaignType" required>
+            <option value="">Select type</option>
+            <option value="TITHES">Tithes</option>
+            <option value="OFFERING">Offering</option>
+            <option value="DONATION">Donation</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="campaignCommunity">Community *</label>
+          <select id="campaignCommunity" required>
+            <option value="">Select community</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="campaignTarget">Target Amount (KES, Optional)</label>
+          <input
+            type="number"
+            id="campaignTarget"
+            placeholder="Enter target amount"
+            min="0"
+            step="0.01"
+          />
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="closeCreateModal()">
+            Cancel
+          </button>
+          <button class="btn" onclick="createCampaign()">
+            <i class="fas fa-check"></i> Create
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Contribute Modal -->
+    <div id="contributeModal" class="modal">
+      <div class="modal-content">
+        <h2 style="margin-bottom: 20px;">
+          <i class="fas fa-hand-holding-heart"></i> Contribute to Campaign
+        </h2>
+        <div id="contributeMessage" class="message" style="display: none"></div>
+        <div id="campaignInfo" style="margin-bottom: 20px; padding: 15px; background: #f7fafc; border-radius: 10px;">
+          <!-- Campaign info will be shown here -->
+        </div>
+        <div class="form-group">
+          <label for="contributeAmount">Amount (KES) *</label>
+          <input
+            type="number"
+            id="contributeAmount"
+            placeholder="Enter amount"
+            min="1"
+            step="0.01"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="contributeMemo">Memo (Optional)</label>
+          <textarea
+            id="contributeMemo"
+            rows="3"
+            placeholder="Add a note about your contribution"
+          ></textarea>
+        </div>
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="closeContributeModal()">
+            Cancel
+          </button>
+          <button class="btn" onclick="submitContribution()">
+            <i class="fas fa-check"></i> Contribute
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/api-client.js"></script>
     <script>
-      // For now, show placeholder campaigns
-      // In production, this would load from the API
-      const campaigns = [
-        {
-          id: 1,
-          title: "Building Fund Drive",
-          type: "TITHES",
-          target_amount: 100000,
-          current_amount: 45000,
-          status: "ACTIVE",
-        },
-        {
-          id: 2,
-          title: "Youth Development",
-          type: "DONATION",
-          target_amount: 50000,
-          current_amount: 32000,
-          status: "ACTIVE",
-        },
-        {
-          id: 3,
-          title: "Monthly Offering",
-          type: "OFFERING",
-          target_amount: 20000,
-          current_amount: 18500,
-          status: "ACTIVE",
-        },
-      ];
+      let currentCommunityId = null;
+      let currentCampaignId = null;
 
-      function displayCampaigns() {
+      function isAuthenticated() {
+        return !!localStorage.getItem("access_token");
+      }
+
+      function showMessage(message, type) {
+        const msgEl = document.getElementById("message");
+        msgEl.textContent = message;
+        msgEl.className = `message ${type}`;
+        msgEl.style.display = "block";
+        setTimeout(() => {
+          msgEl.style.display = "none";
+        }, 5000);
+      }
+
+      // Get community ID from URL if present
+      const urlParams = new URLSearchParams(window.location.search);
+      currentCommunityId = urlParams.get("community");
+
+      async function loadCampaigns() {
+        if (!isAuthenticated()) {
+          showMessage("Please log in to view campaigns", "error");
+          setTimeout(() => {
+            window.location.href = "/static/auth.html";
+          }, 2000);
+          return;
+        }
+
+        try {
+          let campaigns = [];
+
+          if (currentCommunityId) {
+            // Load campaigns for specific community
+            campaigns = await CampaignAPI.listByCommunity(currentCommunityId);
+          } else {
+            // Load all campaigns from user's communities
+            const communities = await CommunityAPI.list();
+            for (const community of communities) {
+              try {
+                const communityCampaigns = await CampaignAPI.listByCommunity(community.id);
+                campaigns = campaigns.concat(communityCampaigns);
+              } catch (error) {
+                console.error(`Failed to load campaigns for community ${community.id}:`, error);
+              }
+            }
+          }
+
+          displayCampaigns(campaigns);
+        } catch (error) {
+          console.error("Failed to load campaigns:", error);
+          showMessage(
+            "Failed to load campaigns: " + (error.message || "Unknown error"),
+            "error"
+          );
+          document.getElementById("campaignsGrid").innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #dc3545;">
+              <i class="fas fa-exclamation-circle" style="font-size: 3rem"></i>
+              <p style="margin-top: 20px">Failed to load campaigns</p>
+            </div>
+          `;
+        }
+      }
+
+      function displayCampaigns(campaigns) {
         const grid = document.getElementById("campaignsGrid");
+
+        if (campaigns.length === 0) {
+          grid.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #718096; grid-column: 1 / -1;">
+              <i class="fas fa-bullhorn" style="font-size: 3rem"></i>
+              <p style="margin-top: 20px">No campaigns yet. Create one to get started!</p>
+            </div>
+          `;
+          return;
+        }
 
         grid.innerHTML = campaigns
           .map((campaign) => {
-            const progress =
-              (campaign.current_amount / campaign.target_amount) * 100;
-            const typeClass = `type-${campaign.type.toLowerCase()}`;
+            const currentAmount = parseFloat(campaign.current_amount || 0);
+            const targetAmount = parseFloat(campaign.target_amount || 1);
+            const progress = targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0;
+            const typeClass = `type-${(campaign.type || "OTHER").toLowerCase()}`;
 
             return `
             <div class="campaign-card">
-              <div class="campaign-type ${typeClass}">${campaign.type}</div>
+              <div class="campaign-type ${typeClass}">${campaign.type || "OTHER"}</div>
               <h2 style="font-size: 1.5rem; margin-bottom: 15px; color: #2d3748;">${
                 campaign.title
               }</h2>
+              ${targetAmount > 0 ? `
               <div class="progress-bar">
-                <div class="progress-fill" style="width: ${Math.min(
-                  progress,
-                  100
-                )}%"></div>
+                <div class="progress-fill" style="width: ${Math.min(progress, 100)}%"></div>
               </div>
               <div style="display: flex; justify-content: space-between; margin: 15px 0;">
                 <div>
-                  <div style="font-size: 1.8rem; font-weight: 700; color: #2d3748;">KES ${parseInt(
-                    campaign.current_amount
-                  ).toLocaleString()}</div>
+                  <div style="font-size: 1.8rem; font-weight: 700; color: #2d3748;">KES ${currentAmount.toLocaleString()}</div>
                   <div style="color: #718096; font-size: 0.9rem;">Raised</div>
                 </div>
                 <div style="text-align: right;">
-                  <div style="font-size: 1.8rem; font-weight: 700; color: #718096;">KES ${parseInt(
-                    campaign.target_amount
-                  ).toLocaleString()}</div>
+                  <div style="font-size: 1.8rem; font-weight: 700; color: #718096;">KES ${targetAmount.toLocaleString()}</div>
                   <div style="color: #718096; font-size: 0.9rem;">Goal</div>
                 </div>
               </div>
-              <button class="btn btn-primary" onclick="contribute(${
-                campaign.id
-              })" style="width: 100%;">
+              ` : `
+              <div style="margin: 15px 0;">
+                <div style="font-size: 1.8rem; font-weight: 700; color: #2d3748;">KES ${currentAmount.toLocaleString()}</div>
+                <div style="color: #718096; font-size: 0.9rem;">Total Raised</div>
+              </div>
+              `}
+              <button class="btn" onclick="openContributeModal(${campaign.id})">
                 <i class="fas fa-hand-holding-heart"></i> Contribute Now
               </button>
             </div>
@@ -206,28 +475,204 @@
           .join("");
       }
 
-      function contribute(campaignId) {
-        alert("Contribution feature will connect to API");
+      async function openCreateModal() {
+        if (!isAuthenticated()) {
+          showMessage("Please log in to create a campaign", "error");
+          window.location.href = "/static/auth.html";
+          return;
+        }
+
+        // Load communities
+        try {
+          const communities = await CommunityAPI.list();
+          const select = document.getElementById("campaignCommunity");
+          select.innerHTML = '<option value="">Select community</option>';
+          communities.forEach((community) => {
+            const option = document.createElement("option");
+            option.value = community.id;
+            option.textContent = community.name;
+            select.appendChild(option);
+          });
+
+          if (currentCommunityId) {
+            select.value = currentCommunityId;
+          }
+        } catch (error) {
+          console.error("Failed to load communities:", error);
+          showMessage("Failed to load communities", "error");
+        }
+
+        document.getElementById("createModal").style.display = "block";
+        document.getElementById("campaignTitle").value = "";
+        document.getElementById("campaignType").value = "";
+        document.getElementById("campaignTarget").value = "";
+        document.getElementById("createMessage").style.display = "none";
       }
 
+      function closeCreateModal() {
+        document.getElementById("createModal").style.display = "none";
+      }
+
+      async function createCampaign() {
+        const title = document.getElementById("campaignTitle").value;
+        const type = document.getElementById("campaignType").value;
+        const communityId = document.getElementById("campaignCommunity").value;
+        const target = document.getElementById("campaignTarget").value;
+
+        if (!title || !type || !communityId) {
+          showCreateMessage("Please fill in all required fields", "error");
+          return;
+        }
+
+        try {
+          const msgEl = document.getElementById("createMessage");
+          msgEl.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Creating campaign...';
+          msgEl.className = "message";
+          msgEl.style.display = "block";
+
+          const result = await CampaignAPI.create({
+            title: title,
+            type: type,
+            community_id: parseInt(communityId),
+            target_amount: target ? parseFloat(target) : null,
+          });
+
+          if (result.success) {
+            showCreateMessage("Campaign created successfully!", "success");
+            setTimeout(() => {
+              closeCreateModal();
+              loadCampaigns();
+              showMessage("Campaign created successfully!", "success");
+            }, 1500);
+          } else {
+            showCreateMessage(
+              result.message || "Failed to create campaign",
+              "error"
+            );
+          }
+        } catch (error) {
+          console.error("Create campaign error:", error);
+          showCreateMessage(
+            "Failed to create campaign: " + (error.message || "Unknown error"),
+            "error"
+          );
+        }
+      }
+
+      function showCreateMessage(message, type) {
+        const msgEl = document.getElementById("createMessage");
+        msgEl.textContent = message;
+        msgEl.className = `message ${type}`;
+        msgEl.style.display = "block";
+      }
+
+      async function openContributeModal(campaignId) {
+        if (!isAuthenticated()) {
+          showMessage("Please log in to contribute", "error");
+          window.location.href = "/static/auth.html";
+          return;
+        }
+
+        currentCampaignId = campaignId;
+
+        try {
+          const campaign = await CampaignAPI.get(campaignId);
+          const infoEl = document.getElementById("campaignInfo");
+          infoEl.innerHTML = `
+            <h3 style="margin-bottom: 10px; color: #2d3748;">${campaign.title}</h3>
+            <p style="color: #718096; margin-bottom: 5px;">Type: ${campaign.type || "OTHER"}</p>
+            ${campaign.target_amount ? `<p style="color: #718096;">Target: KES ${parseFloat(campaign.target_amount).toLocaleString()}</p>` : ""}
+          `;
+        } catch (error) {
+          console.error("Failed to load campaign:", error);
+        }
+
+        document.getElementById("contributeModal").style.display = "block";
+        document.getElementById("contributeAmount").value = "";
+        document.getElementById("contributeMemo").value = "";
+        document.getElementById("contributeMessage").style.display = "none";
+      }
+
+      function closeContributeModal() {
+        document.getElementById("contributeModal").style.display = "none";
+      }
+
+      async function submitContribution() {
+        const amount = document.getElementById("contributeAmount").value;
+        const memo = document.getElementById("contributeMemo").value;
+
+        if (!amount || parseFloat(amount) <= 0) {
+          showContributeMessage("Please enter a valid amount", "error");
+          return;
+        }
+
+        if (!currentCampaignId) {
+          showContributeMessage("Campaign ID is missing", "error");
+          return;
+        }
+
+        try {
+          const msgEl = document.getElementById("contributeMessage");
+          msgEl.innerHTML =
+            '<i class="fas fa-spinner fa-spin"></i> Processing contribution...';
+          msgEl.className = "message";
+          msgEl.style.display = "block";
+
+          // Generate idempotency key
+          const idempotencyKey = `campaign-${currentCampaignId}-${Date.now()}`;
+
+          const result = await CampaignAPI.contribute(
+            currentCampaignId,
+            parseFloat(amount),
+            memo
+          );
+
+          if (result.success) {
+            showContributeMessage("Contribution successful!", "success");
+            setTimeout(() => {
+              closeContributeModal();
+              loadCampaigns();
+              showMessage("Your contribution has been recorded!", "success");
+            }, 1500);
+          } else {
+            showContributeMessage(
+              result.message || "Failed to make contribution",
+              "error"
+            );
+          }
+        } catch (error) {
+          console.error("Contribution error:", error);
+          showContributeMessage(
+            "Failed to make contribution: " + (error.message || "Unknown error"),
+            "error"
+          );
+        }
+      }
+
+      function showContributeMessage(message, type) {
+        const msgEl = document.getElementById("contributeMessage");
+        msgEl.textContent = message;
+        msgEl.className = `message ${type}`;
+        msgEl.style.display = "block";
+      }
+
+      // Close modals when clicking outside
+      window.onclick = function (event) {
+        const createModal = document.getElementById("createModal");
+        const contributeModal = document.getElementById("contributeModal");
+        if (event.target == createModal) {
+          closeCreateModal();
+        }
+        if (event.target == contributeModal) {
+          closeContributeModal();
+        }
+      };
+
+      // Load campaigns on page load
       document.addEventListener("DOMContentLoaded", function () {
-        displayCampaigns();
+        loadCampaigns();
       });
     </script>
-
-    <style>
-      .btn {
-        padding: 12px 24px;
-        border: none;
-        border-radius: 12px;
-        font-size: 1rem;
-        font-weight: 600;
-        cursor: pointer;
-        background: linear-gradient(45deg, #667eea, #764ba2);
-        color: white;
-      }
-    </style>
   </body>
 </html>
-
-

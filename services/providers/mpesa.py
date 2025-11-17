@@ -10,6 +10,7 @@ from services.providers.base import ProviderAdapter, ProviderInitResponse, Payou
 from services.providers.mpesa.auth import MpesaAuth
 from services.providers.mpesa.stk_push import MpesaSTKPush
 from services.providers.mpesa.c2b import MpesaC2B
+from services.providers.mpesa.b2c import MpesaB2C
 
 
 class MpesaAdapter(ProviderAdapter):
@@ -19,6 +20,7 @@ class MpesaAdapter(ProviderAdapter):
         self.auth = MpesaAuth()
         self.stk_push = MpesaSTKPush()
         self.c2b = MpesaC2B()
+        self.b2c = MpesaB2C()
 
     def initiate_debit(
         self, *, phone: str, amount: Decimal, currency: str, reference: str
@@ -120,6 +122,46 @@ class MpesaAdapter(ProviderAdapter):
                 "amount": trans_amount,
             }
         
+        # Handle B2C result callback
+        result = payload.get("Result")
+        if result:
+            result_code = result.get("ResultCode")
+            transaction_id = result.get("TransactionID")
+            originator_conversation_id = result.get("OriginatorConversationID")
+            
+            # Parse result parameters
+            result_parameters = result.get("ResultParameters", {})
+            result_parameter = result_parameters.get("ResultParameter", [])
+            
+            transaction_receipt = None
+            transaction_amount = None
+            
+            for param in result_parameter:
+                key = param.get("Key")
+                value = param.get("Value")
+                if key == "TransactionReceipt":
+                    transaction_receipt = value
+                elif key == "TransactionAmount":
+                    transaction_amount = value
+            
+            if result_code == "0":
+                # Success
+                return {
+                    "status": "SUCCESS",
+                    "provider_ref": transaction_receipt or transaction_id,
+                    "conversation_id": originator_conversation_id,
+                    "amount": transaction_amount,
+                }
+            else:
+                # Failed
+                result_desc = result.get("ResultDesc", "B2C payout failed")
+                return {
+                    "status": "FAILED",
+                    "provider_ref": transaction_id or originator_conversation_id,
+                    "conversation_id": originator_conversation_id,
+                    "message": result_desc,
+                }
+        
         # Unknown payload format
         current_app.logger.warning(f"Unknown M-Pesa webhook payload format: {payload}")
         return {
@@ -133,22 +175,39 @@ class MpesaAdapter(ProviderAdapter):
     ) -> PayoutResponse:
         """
         Initiate a payout (B2C) to recipient
-        Note: B2C API implementation can be added here later
         
         Args:
             phone: Recipient phone number
             amount: Payout amount
-            currency: Currency code
-            reference: Unique transaction reference
+            currency: Currency code (should be KES for M-Pesa)
+            reference: Unique transaction reference (used as remarks)
             
         Returns:
-            PayoutResponse with success status
+            PayoutResponse with success status and conversation_id
         """
-        # B2C implementation can be added here
-        # For now, return not implemented
-        return PayoutResponse(
-            False, message="M-Pesa B2C payout not yet implemented. Use B2C API separately."
+        if currency != "KES":
+            return PayoutResponse(
+                False, message=f"M-Pesa only supports KES, got {currency}"
+            )
+
+        result = self.b2c.initiate_payout(
+            phone=phone,
+            amount=amount,
+            remarks=reference[:100] if reference else "Payout",
+            command_id="BusinessPayment",
         )
+
+        if result.get("success"):
+            conversation_id = result.get("conversation_id")
+            return PayoutResponse(
+                True,
+                provider_ref=conversation_id,
+                message=result.get("response_description", "B2C payout initiated"),
+            )
+        else:
+            return PayoutResponse(
+                False, message=result.get("message", "B2C payout failed")
+            )
 
     def refund(
         self, *, provider_ref: str, amount: Decimal, reason: str
