@@ -92,7 +92,27 @@ def list_campaigns(community_id: int):
             .order_by(Campaign.created_at.desc())
             .all()
         )
-        return jsonify({"success": True, "campaigns": [c.to_dict() for c in cs]}), 200
+        
+        # Calculate current_amount for each campaign from ledger entries
+        from models.ledger_journal import LedgerJournal
+        from decimal import Decimal
+        
+        campaigns_data = []
+        for c in cs:
+            campaign_dict = c.to_dict()
+            # Calculate current amount from journal entries with external_ref matching campaign
+            external_ref = f"CAMPAIGN-{c.id}"
+            journal_entries = LedgerJournal.query.filter_by(
+                external_ref=external_ref
+            ).all()
+            current_amount = sum(
+                Decimal(str(entry.amount)) for entry in journal_entries
+                if entry.amount and entry.amount > 0
+            )
+            campaign_dict["current_amount"] = float(current_amount)
+            campaigns_data.append(campaign_dict)
+        
+        return jsonify({"success": True, "campaigns": campaigns_data}), 200
     except Exception:
         return (
             jsonify(
@@ -112,7 +132,23 @@ def get_campaign(campaign_id: int):
         campaign = Campaign.query.get(campaign_id)
         if not campaign:
             return jsonify({"success": False, "message": "Campaign not found"}), 404
-        return jsonify({"success": True, "campaign": campaign.to_dict()}), 200
+        
+        # Calculate current_amount from ledger entries
+        from models.ledger_journal import LedgerJournal
+        from decimal import Decimal
+        
+        campaign_dict = campaign.to_dict()
+        external_ref = f"CAMPAIGN-{campaign_id}"
+        journal_entries = LedgerJournal.query.filter_by(
+            external_ref=external_ref
+        ).all()
+        current_amount = sum(
+            Decimal(str(entry.amount)) for entry in journal_entries
+            if entry.amount and entry.amount > 0
+        )
+        campaign_dict["current_amount"] = float(current_amount)
+        
+        return jsonify({"success": True, "campaign": campaign_dict}), 200
     except Exception:
         return (
             jsonify(

@@ -86,7 +86,10 @@ class AuthService:
             response["message"] = (
                 "OTP sent successfully (development mode - OTP included in response)"
             )
+            # In development mode, always return success even if SMS fails
+            return response
 
+        # In production, only return success if SMS was sent successfully
         if sms_result["success"]:
             return response
         else:

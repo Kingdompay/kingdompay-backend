@@ -5,6 +5,7 @@ M-Pesa (Daraja) payment provider module
 from .auth import MpesaAuth
 from .stk_push import MpesaSTKPush
 from .c2b import MpesaC2B
+from .b2c import MpesaB2C
 
 # Import MpesaAdapter from the mpesa.py file in parent directory
 # Use importlib to avoid circular imports
@@ -64,5 +65,5 @@ else:
         def refund(self, *, provider_ref: str, amount: Decimal, reason: str):
             return PayoutResponse(False, message="Refund not yet implemented")
 
-__all__ = ["MpesaAuth", "MpesaSTKPush", "MpesaC2B", "MpesaAdapter"]
+__all__ = ["MpesaAuth", "MpesaSTKPush", "MpesaC2B", "MpesaB2C", "MpesaAdapter"]
 

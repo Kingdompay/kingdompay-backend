@@ -262,11 +262,16 @@ const CampaignAPI = {
   },
 
   async contribute(campaignId, amount, description) {
+    // Generate idempotency key
+    const idempotencyKey = `campaign-${campaignId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     return await apiCall(`/campaigns/${campaignId}/contribute`, {
       method: "POST",
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
       body: {
         amount: amount,
-        description: description,
+        memo: description,
       },
     });
   },

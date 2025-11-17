@@ -110,12 +110,13 @@ def provider_webhook(provider: str):
         provider_upper = provider.upper()
         status = event.get("status")
 
-        # Find payment - try multiple methods for MPESA STK Push
+        # Find payment - try multiple methods for MPESA STK Push and B2C
         payment = None
         provider_ref = event.get("provider_ref")
         checkout_id = event.get("checkout_request_id")
+        conversation_id = event.get("conversation_id")
         
-        # For MPESA: payment is stored with CheckoutRequestID as provider_ref initially
+        # For MPESA STK Push: payment is stored with CheckoutRequestID as provider_ref initially
         # Webhook returns MpesaReceiptNumber as provider_ref and CheckoutRequestID separately
         if checkout_id:
             # First try to find by checkout_request_id (most reliable for MPESA STK)
@@ -123,6 +124,13 @@ def provider_webhook(provider: str):
                 provider=provider_upper, provider_ref=checkout_id
             ).first()
             current_app.logger.info(f"Payment lookup by checkout_id {checkout_id}: {payment.id if payment else 'not found'}")
+        
+        # For MPESA B2C: payment is stored with conversation_id as provider_ref initially
+        if not payment and conversation_id:
+            payment = Payment.query.filter_by(
+                provider=provider_upper, provider_ref=conversation_id
+            ).first()
+            current_app.logger.info(f"Payment lookup by conversation_id {conversation_id}: {payment.id if payment else 'not found'}")
         
         if not payment and provider_ref:
             # Try to find by provider_ref (works for other providers or if receipt number matches)
@@ -132,32 +140,53 @@ def provider_webhook(provider: str):
             current_app.logger.info(f"Payment lookup by provider_ref {provider_ref}: {payment.id if payment else 'not found'}")
         
         if not payment:
-            current_app.logger.warning(f"Payment not found for provider {provider_upper}, checkout_id: {checkout_id}, provider_ref: {provider_ref}")
+            current_app.logger.warning(f"Payment not found for provider {provider_upper}, checkout_id: {checkout_id}, conversation_id: {conversation_id}, provider_ref: {provider_ref}")
             # Return 200 to prevent webhook retries for invalid requests
             return jsonify({"success": False, "message": "Payment not found"}), 200
 
         # Handle successful payment
-        if status == "SUCCESS" and payment.status == "PENDING":
-            # Update provider_ref to final receipt number if available (for MPESA)
-            if provider_ref and provider_ref != checkout_id:
+        if status == "SUCCESS" and payment.status in ["PENDING", "PENDING_APPROVAL"]:
+            # Update provider_ref to final receipt number if available (for MPESA STK or B2C)
+            if provider_ref and provider_ref != checkout_id and provider_ref != conversation_id:
                 payment.provider_ref = provider_ref
             
-            # Verify wallet exists before posting
-            wallet = Wallet.query.get(payment.payer_wallet_id)
-            if not wallet:
-                current_app.logger.error(f"Payment {payment.id}: Wallet {payment.payer_wallet_id} not found")
-                return jsonify({"success": False, "message": f"Wallet {payment.payer_wallet_id} not found"}), 400
+            # For payouts (payee_wallet_id), deduct from wallet
+            # For top-ups (payer_wallet_id), credit to wallet
+            if payment.payee_wallet_id:
+                # This is a payout - deduct from wallet
+                wallet = Wallet.query.get(payment.payee_wallet_id)
+                if not wallet:
+                    current_app.logger.error(f"Payment {payment.id}: Wallet {payment.payee_wallet_id} not found")
+                    return jsonify({"success": False, "message": f"Wallet {payment.payee_wallet_id} not found"}), 400
+                
+                # Post ledger entry (debit from wallet)
+                journal_result = ledger_service.post_transfer(
+                    from_wallet_id=payment.payee_wallet_id,
+                    to_wallet_id=None,  # External destination
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    memo="Payout via " + provider,
+                    idempotency_key=f"provider-{payment.provider_ref or conversation_id or checkout_id}",
+                    meta={"payment_id": payment.id, "provider": provider},
+                )
+            else:
+                # This is a top-up - credit to wallet
+                wallet = Wallet.query.get(payment.payer_wallet_id)
+                if not wallet:
+                    current_app.logger.error(f"Payment {payment.id}: Wallet {payment.payer_wallet_id} not found")
+                    return jsonify({"success": False, "message": f"Wallet {payment.payer_wallet_id} not found"}), 400
+                
+                # Post ledger entry (credit to wallet)
+                journal_result = ledger_service.post_transfer(
+                    from_wallet_id=None,  # External source
+                    to_wallet_id=payment.payer_wallet_id,
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    memo="Top-up via " + provider,
+                    idempotency_key=f"provider-{payment.provider_ref or checkout_id}",
+                    meta={"payment_id": payment.id, "provider": provider},
+                )
             
-            # Post ledger entry
-            journal_result = ledger_service.post_transfer(
-                from_wallet_id=None,  # External source
-                to_wallet_id=payment.payer_wallet_id,
-                amount=payment.amount,
-                currency=payment.currency,
-                memo="Top-up via " + provider,
-                idempotency_key=f"provider-{payment.provider_ref or checkout_id}",
-                meta={"payment_id": payment.id, "provider": provider},
-            )
             if journal_result.get("success"):
                 payment.status = "SUCCESS"
                 payment.journal_id = journal_result.get("journal_id")

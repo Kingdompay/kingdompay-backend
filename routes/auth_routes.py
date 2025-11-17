@@ -13,10 +13,13 @@ from extensions import limiter
 auth_service = AuthService()
 
 
-@api_v1_bp.route("/auth/otp/request", methods=["POST"])
+@api_v1_bp.route("/auth/otp/request", methods=["POST", "OPTIONS"])
 @limiter.limit("5 per minute")
 def request_otp():
     """Request OTP for phone number verification"""
+    # Handle CORS preflight
+    if request.method == "OPTIONS":
+        return "", 200
     try:
         data = request.get_json()
 
@@ -35,11 +38,15 @@ def request_otp():
             return jsonify(result), 400
 
     except Exception as e:
+        # Log the actual error for debugging
+        import traceback
+        from flask import current_app
+        current_app.logger.error(f"Error in request_otp: {str(e)}\n{traceback.format_exc()}")
         return (
             jsonify(
                 {
                     "success": False,
-                    "message": "An error occurred while processing your request",
+                    "message": f"An error occurred while processing your request: {str(e)}",
                 }
             ),
             500,
