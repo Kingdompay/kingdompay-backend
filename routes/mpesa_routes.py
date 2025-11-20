@@ -9,12 +9,17 @@ from routes import api_v1_bp
 from services.providers.mpesa.stk_push import MpesaSTKPush
 from services.providers.mpesa.c2b import MpesaC2B
 from services.providers.mpesa.b2c import MpesaB2C
+from services.auth_service import AuthService
+from extensions import db
+from models.payment import Payment
+from models.wallet import Wallet
 from decimal import Decimal, InvalidOperation
 
 
 stk_push_service = MpesaSTKPush()
 c2b_service = MpesaC2B()
 b2c_service = MpesaB2C()
+auth_service = AuthService()
 
 
 @api_v1_bp.route("/mpesa/status", methods=["GET"])
@@ -128,6 +133,36 @@ def initiate_stk_push():
                 400,
             )
 
+        # Try to get user and wallet if authenticated
+        user = None
+        wallet_id = None
+        try:
+            user = auth_service.get_current_user()
+            if user:
+                wallet = Wallet.find_by_user_id(user.id)
+                if wallet:
+                    wallet_id = wallet.id
+        except:
+            # User not authenticated or wallet not found - continue without wallet
+            pass
+
+        # Create Payment record before initiating STK Push
+        # This ensures webhook handler can find the payment
+        payment = Payment(
+            payer_wallet_id=wallet_id,  # May be None if user not authenticated
+            amount=amount_decimal,
+            currency="KES",  # M-Pesa only supports KES
+            status="PENDING",
+            method="MOMO",
+            provider="MPESA",
+        )
+        db.session.add(payment)
+        db.session.flush()  # Get payment.id before commit
+
+        # Use payment ID in account reference if not provided
+        if not account_reference:
+            account_reference = f"PAY-{payment.id}"
+
         # Initiate STK Push
         result = stk_push_service.initiate_stk_push(
             phone=phone,
@@ -137,11 +172,17 @@ def initiate_stk_push():
         )
 
         if result.get("success"):
+            # Update payment with checkout_request_id as provider_ref
+            checkout_request_id = result.get("checkout_request_id")
+            payment.provider_ref = checkout_request_id
+            db.session.commit()
+
             return (
                 jsonify(
                     {
                         "success": True,
-                        "checkout_request_id": result.get("checkout_request_id"),
+                        "payment_id": payment.id,
+                        "checkout_request_id": checkout_request_id,
                         "customer_message": result.get("customer_message"),
                         "merchant_request_id": result.get("merchant_request_id"),
                         "response_code": result.get("response_code"),
@@ -150,11 +191,16 @@ def initiate_stk_push():
                 200,
             )
         else:
+            # STK Push failed - mark payment as failed
+            payment.status = "FAILED"
+            db.session.commit()
+
             error_response = {
                 "error": True,
                 "message": result.get("message", "STK Push initiation failed"),
                 "code": "STK_PUSH_FAILED",
                 "response_code": result.get("response_code"),
+                "payment_id": payment.id,  # Include payment ID even on failure
             }
             # Include error details if available for debugging
             if result.get("error_details"):
@@ -163,6 +209,7 @@ def initiate_stk_push():
 
     except Exception as e:
         current_app.logger.exception("Error initiating STK Push")
+        db.session.rollback()
         return (
             jsonify(
                 {

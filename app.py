@@ -71,6 +71,30 @@ def create_app(config_class=Config):
         except Exception as e:
             app.logger.warning(f"Could not initialize system wallets: {e}")
 
+        # Validate M-Pesa configuration on startup
+        try:
+            from services.providers.mpesa.stk_push import MpesaSTKPush
+
+            stk_service = MpesaSTKPush()
+            if (
+                stk_service.shortcode
+                and stk_service.passkey
+                and stk_service.callback_url
+            ):
+                if stk_service._validate_callback_url(stk_service.callback_url):
+                    app.logger.info("M-Pesa STK Push configuration validated")
+                else:
+                    app.logger.warning(
+                        f"M-Pesa callback URL may be invalid: {stk_service.callback_url}. "
+                        f"Must be HTTPS for production."
+                    )
+            else:
+                app.logger.warning(
+                    "M-Pesa STK Push not fully configured. Some features may not work."
+                )
+        except Exception as e:
+            app.logger.warning(f"Could not validate M-Pesa configuration: {e}")
+
     # Initialize security middleware
     SecurityMiddleware(app)
 
