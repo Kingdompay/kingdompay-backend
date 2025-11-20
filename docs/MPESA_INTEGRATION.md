@@ -90,6 +90,7 @@ Content-Type: application/json
 ```json
 {
   "success": true,
+  "payment_id": 123,
   "checkout_request_id": "ws_CO_123456789",
   "customer_message": "Success. Request accepted for processing",
   "merchant_request_id": "12345-67890-1",
@@ -97,7 +98,9 @@ Content-Type: application/json
 }
 ```
 
-The customer will receive an STK Push prompt on their phone. The payment result will be sent to the callback URL.
+**Note**: A Payment record is automatically created before initiating the STK Push. The `payment_id` can be used to track the payment status. If you're authenticated, the payment will be linked to your wallet. If not authenticated, the payment will still be tracked but won't be credited to a wallet until you link it.
+
+The customer will receive an STK Push prompt on their phone. The payment result will be sent to the callback URL, and the Payment record will be updated accordingly.
 
 ### C2B URL Registration
 

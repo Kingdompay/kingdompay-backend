@@ -171,21 +171,35 @@ def provider_webhook(provider: str):
                 )
             else:
                 # This is a top-up - credit to wallet
-                wallet = Wallet.query.get(payment.payer_wallet_id)
-                if not wallet:
-                    current_app.logger.error(f"Payment {payment.id}: Wallet {payment.payer_wallet_id} not found")
-                    return jsonify({"success": False, "message": f"Wallet {payment.payer_wallet_id} not found"}), 400
-                
-                # Post ledger entry (credit to wallet)
-                journal_result = ledger_service.post_transfer(
-                    from_wallet_id=None,  # External source
-                    to_wallet_id=payment.payer_wallet_id,
-                    amount=payment.amount,
-                    currency=payment.currency,
-                    memo="Top-up via " + provider,
-                    idempotency_key=f"provider-{payment.provider_ref or checkout_id}",
-                    meta={"payment_id": payment.id, "provider": provider},
-                )
+                if payment.payer_wallet_id:
+                    wallet = Wallet.query.get(payment.payer_wallet_id)
+                    if not wallet:
+                        current_app.logger.error(f"Payment {payment.id}: Wallet {payment.payer_wallet_id} not found")
+                        return jsonify({"success": False, "message": f"Wallet {payment.payer_wallet_id} not found"}), 400
+                    
+                    # Post ledger entry (credit to wallet)
+                    journal_result = ledger_service.post_transfer(
+                        from_wallet_id=None,  # External source
+                        to_wallet_id=payment.payer_wallet_id,
+                        amount=payment.amount,
+                        currency=payment.currency,
+                        memo="Top-up via " + provider,
+                        idempotency_key=f"provider-{payment.provider_ref or checkout_id}",
+                        meta={"payment_id": payment.id, "provider": provider},
+                    )
+                else:
+                    # Payment without wallet_id - mark as success but don't credit
+                    # This can happen for unauthenticated payments via /api/v1/mpesa/pay
+                    current_app.logger.warning(
+                        f"Payment {payment.id} succeeded but has no payer_wallet_id. "
+                        f"Payment will be marked as SUCCESS but no wallet credited. "
+                        f"Amount: {payment.amount} {payment.currency}"
+                    )
+                    # Mark as success without ledger entry
+                    payment.status = "SUCCESS"
+                    db.session.commit()
+                    current_app.logger.info(f"Payment {payment.id} marked as SUCCESS (no wallet to credit)")
+                    return jsonify({"success": True, "message": "Payment processed but no wallet to credit"}), 200
             
             if journal_result.get("success"):
                 payment.status = "SUCCESS"

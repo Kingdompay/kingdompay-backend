@@ -25,6 +25,10 @@ class MpesaSTKPush:
         self.shortcode = os.environ.get("MPESA_SHORTCODE")
         self.passkey = os.environ.get("MPESA_PASSKEY")
         self.callback_url = os.environ.get("MPESA_CALLBACK_URL")
+        
+        # M-Pesa STK Push limits
+        self.MIN_AMOUNT = Decimal("1.00")  # Minimum 1 KES
+        self.MAX_AMOUNT = Decimal("70000.00")  # Maximum 70,000 KES for STK Push
 
     def _generate_password(self) -> Tuple[str, str]:
         """
@@ -47,9 +51,18 @@ class MpesaSTKPush:
             
         Returns:
             Formatted phone number
+            
+        Raises:
+            ValueError: If phone number is invalid
         """
+        if not phone:
+            raise ValueError("Phone number cannot be empty")
+        
         # Remove all non-digit characters
         phone_clean = "".join(filter(str.isdigit, phone))
+        
+        if not phone_clean:
+            raise ValueError("Phone number must contain at least one digit")
 
         # Convert to 254 format
         if phone_clean.startswith("0"):
@@ -62,7 +75,62 @@ class MpesaSTKPush:
             # Assume it's missing country code
             phone_clean = f"254{phone_clean}"
 
+        # Validate phone number length (should be 12 digits: 254 + 9 digits)
+        if len(phone_clean) != 12:
+            raise ValueError(f"Invalid phone number length: {len(phone_clean)} digits (expected 12)")
+        
+        # Validate it starts with 254
+        if not phone_clean.startswith("254"):
+            raise ValueError(f"Phone number must start with 254, got: {phone_clean}")
+
         return phone_clean
+    
+    def _validate_amount(self, amount: Decimal) -> Dict[str, Any]:
+        """
+        Validate amount against M-Pesa limits
+        
+        Args:
+            amount: Payment amount
+            
+        Returns:
+            Dict with validation result
+        """
+        if amount < self.MIN_AMOUNT:
+            return {
+                "valid": False,
+                "message": f"Amount must be at least {self.MIN_AMOUNT} KES"
+            }
+        
+        if amount > self.MAX_AMOUNT:
+            return {
+                "valid": False,
+                "message": f"Amount cannot exceed {self.MAX_AMOUNT} KES for STK Push"
+            }
+        
+        return {"valid": True}
+    
+    def _validate_callback_url(self, url: str) -> bool:
+        """
+        Validate callback URL format
+        
+        Args:
+            url: Callback URL
+            
+        Returns:
+            True if valid, False otherwise
+        """
+        if not url:
+            return False
+        
+        # Must be HTTP or HTTPS
+        if not (url.startswith("http://") or url.startswith("https://")):
+            return False
+        
+        # For production, must be HTTPS
+        if self.base_url == "https://api.safaricom.co.ke" and not url.startswith("https://"):
+            return False
+        
+        return True
 
     def initiate_stk_push(
         self,
@@ -84,15 +152,44 @@ class MpesaSTKPush:
             Dictionary with success status and response data
         """
         # Validate configuration
-        if not all([self.shortcode, self.passkey, self.callback_url]):
+        missing_config = []
+        if not self.shortcode:
+            missing_config.append("MPESA_SHORTCODE")
+        if not self.passkey:
+            missing_config.append("MPESA_PASSKEY")
+        if not self.callback_url:
+            missing_config.append("MPESA_CALLBACK_URL")
+        
+        if missing_config:
+            error_msg = f"M-Pesa STK Push not configured. Missing: {', '.join(missing_config)}"
+            get_logger().error(error_msg)
             return {
                 "success": False,
-                "message": "M-Pesa STK Push not configured. Missing SHORTCODE, PASSKEY, or CALLBACK_URL",
+                "message": error_msg,
+            }
+        
+        # Validate callback URL
+        if not self._validate_callback_url(self.callback_url):
+            error_msg = f"Invalid callback URL format: {self.callback_url}. Must be HTTPS for production."
+            get_logger().error(error_msg)
+            return {
+                "success": False,
+                "message": error_msg,
+            }
+        
+        # Validate amount
+        amount_validation = self._validate_amount(amount)
+        if not amount_validation["valid"]:
+            get_logger().error(f"Amount validation failed: {amount_validation['message']}")
+            return {
+                "success": False,
+                "message": amount_validation["message"],
             }
 
         # Get access token
         access_token = self.auth.get_access_token()
         if not access_token:
+            get_logger().error("Failed to authenticate with M-Pesa API")
             return {
                 "success": False,
                 "message": "Failed to authenticate with M-Pesa API",
@@ -101,30 +198,54 @@ class MpesaSTKPush:
         # Format phone number
         try:
             phone_formatted = self._format_phone_number(phone)
+        except ValueError as e:
+            get_logger().error(f"Invalid phone number format: {phone} - {str(e)}")
+            return {
+                "success": False,
+                "message": f"Invalid phone number format: {str(e)}",
+            }
         except Exception as e:
-            get_logger().error(f"Invalid phone number format: {phone}")
+            get_logger().exception(f"Unexpected error formatting phone number: {phone}")
             return {
                 "success": False,
                 "message": f"Invalid phone number format: {str(e)}",
             }
 
+        # Validate account reference
+        if not account_reference or len(account_reference.strip()) == 0:
+            get_logger().error("Account reference is required")
+            return {
+                "success": False,
+                "message": "Account reference is required",
+            }
+
         # Generate password and timestamp
         password, timestamp = self._generate_password()
+        
+        # Validate shortcode format (should be string, not int)
+        shortcode_str = str(self.shortcode).strip()
 
         # Prepare request payload
+        # Ensure shortcode is string and amount is integer
         payload = {
-            "BusinessShortCode": self.shortcode,
+            "BusinessShortCode": shortcode_str,
             "Password": password,
             "Timestamp": timestamp,
             "TransactionType": "CustomerPayBillOnline",
-            "Amount": int(float(amount)),
+            "Amount": int(float(amount)),  # M-Pesa requires integer amount
             "PartyA": phone_formatted,
-            "PartyB": self.shortcode,
+            "PartyB": shortcode_str,
             "PhoneNumber": phone_formatted,
             "CallBackURL": self.callback_url,
-            "AccountReference": account_reference[:12],  # Max 12 characters
-            "TransactionDesc": transaction_desc[:13],  # Max 13 characters
+            "AccountReference": account_reference[:12].strip(),  # Max 12 characters, trimmed
+            "TransactionDesc": (transaction_desc or "Payment")[:13].strip(),  # Max 13 characters, trimmed
         }
+        
+        # Log configuration (without sensitive data)
+        get_logger().info(
+            f"STK Push configuration: ShortCode={shortcode_str}, "
+            f"BaseURL={self.base_url}, CallbackURL={self.callback_url[:50]}..."
+        )
 
         # Make API request
         url = f"{self.base_url}/mpesa/stkpush/v1/processrequest"
@@ -150,15 +271,29 @@ class MpesaSTKPush:
                 try:
                     error_data = response.json()
                 except:
-                    error_data = {"errorMessage": response.text}
+                    error_data = {"errorMessage": response.text, "raw_response": response.text[:500]}
                 
-                error_msg = error_data.get("errorMessage") or error_data.get("error_description") or f"HTTP {response.status_code}"
-                get_logger().error(f"STK Push HTTP error {response.status_code}: {error_msg}")
+                error_msg = error_data.get("errorMessage") or error_data.get("error_description") or error_data.get("error") or f"HTTP {response.status_code}"
+                
+                # Log full error details for debugging
+                get_logger().error(
+                    f"STK Push HTTP error {response.status_code}:\n"
+                    f"  Error Message: {error_msg}\n"
+                    f"  Full Response: {json.dumps(error_data, indent=2)}\n"
+                    f"  Request Payload: {json.dumps(payload, indent=2)}"
+                )
+                
                 return {
                     "success": False,
                     "message": f"M-Pesa API error: {response.status_code} - {error_msg}",
                     "response_code": str(response.status_code),
-                    "error_details": error_data
+                    "error_details": error_data,
+                    "debug_info": {
+                        "shortcode": shortcode_str,
+                        "phone": phone_formatted,
+                        "amount": int(float(amount)),
+                        "callback_url": self.callback_url,
+                    }
                 }
 
             data = response.json()
