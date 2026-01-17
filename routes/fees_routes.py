@@ -16,10 +16,59 @@ auth_service = AuthService()
 fee_service = FeeService()
 
 
+# Maximum transaction amount (10 million KES)
+MAX_TRANSACTION_AMOUNT = Decimal("10000000")
+
+
 @api_v1_bp.route("/fees/calculate", methods=["POST"])
 @jwt_required()
 def calculate_fees():
-    """Calculate transaction fees for a given amount"""
+    """
+    Calculate transaction fees
+    ---
+    tags:
+      - Fees
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - amount
+          properties:
+            amount:
+              type: number
+              minimum: 1
+              maximum: 10000000
+              example: 1000
+            community_id:
+              type: integer
+              description: Optional community for fee calculation
+    responses:
+      200:
+        description: Fee breakdown
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            fees:
+              type: object
+              properties:
+                amount:
+                  type: number
+                fee:
+                  type: number
+                total:
+                  type: number
+      400:
+        description: Invalid amount
+      401:
+        description: Unauthorized
+    """
     try:
         data = request.get_json() or {}
         amount = data.get("amount")
@@ -28,8 +77,28 @@ def calculate_fees():
         if not amount:
             return jsonify({"success": False, "message": "amount is required"}), 400
 
+        # Convert to Decimal for validation
+        try:
+            amount_decimal = Decimal(str(amount))
+        except Exception:
+            return jsonify({"success": False, "message": "Invalid amount format"}), 400
+
+        # Validate: amount must be positive
+        if amount_decimal <= 0:
+            return jsonify({
+                "success": False, 
+                "message": "Amount must be greater than zero"
+            }), 400
+
+        # Validate: amount must not exceed maximum
+        if amount_decimal > MAX_TRANSACTION_AMOUNT:
+            return jsonify({
+                "success": False,
+                "message": f"Amount exceeds maximum allowed ({MAX_TRANSACTION_AMOUNT:,.0f} KES)"
+            }), 400
+
         fee_breakdown = fee_service.calculate_fees(
-            Decimal(str(amount)),
+            amount_decimal,
             community_id=community_id,
         )
 
@@ -54,8 +123,28 @@ def validate_transaction_limits():
         if not amount:
             return jsonify({"success": False, "message": "amount is required"}), 400
 
+        # Convert to Decimal for validation
+        try:
+            amount_decimal = Decimal(str(amount))
+        except Exception:
+            return jsonify({"success": False, "message": "Invalid amount format"}), 400
+
+        # Validate: amount must be positive
+        if amount_decimal <= 0:
+            return jsonify({
+                "success": False,
+                "message": "Amount must be greater than zero"
+            }), 400
+
+        # Validate: amount must not exceed maximum
+        if amount_decimal > MAX_TRANSACTION_AMOUNT:
+            return jsonify({
+                "success": False,
+                "message": f"Amount exceeds maximum allowed ({MAX_TRANSACTION_AMOUNT:,.0f} KES)"
+            }), 400
+
         result = fee_service.validate_transaction_limits(
-            Decimal(str(amount)),
+            amount_decimal,
             user_id=user.id,
         )
 

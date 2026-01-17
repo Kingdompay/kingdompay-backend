@@ -49,11 +49,22 @@ def create_app(config_class=Config):
         resources={
             r"/*": {
                 "origins": "*",
-                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization", "X-Request-ID"],
+                "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+                "allow_headers": ["Content-Type", "Authorization", "X-Request-ID", "Idempotency-Key", "X-CSRF-Token"],
+                "expose_headers": ["Content-Type", "Authorization"],
+                "supports_credentials": True,
             }
         },
     )
+
+    # Initialize Swagger/OpenAPI documentation
+    try:
+        from flasgger import Swagger
+        from swagger_config import SWAGGER_TEMPLATE, SWAGGER_CONFIG
+        Swagger(app, template=SWAGGER_TEMPLATE, config=SWAGGER_CONFIG)
+        app.logger.info("Swagger documentation available at /docs")
+    except ImportError:
+        app.logger.warning("Flasgger not installed - API docs not available")
 
     # Initialize services
     app.ledger_service = LedgerService()
@@ -132,7 +143,8 @@ def create_app(config_class=Config):
         """Main dashboard template"""
         try:
             return render_template("index.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "KingdomPay API is running! Visit /dashboard for the frontend demo."
 
     @app.route("/dashboard")
@@ -140,7 +152,8 @@ def create_app(config_class=Config):
         """Dashboard template"""
         try:
             return render_template("index.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "Dashboard template not found"
 
     @app.route("/auth-demo")
@@ -148,7 +161,8 @@ def create_app(config_class=Config):
         """Authentication flow demo"""
         try:
             return render_template("auth.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "Auth demo template not found"
 
     @app.route("/wallet-demo")
@@ -156,7 +170,8 @@ def create_app(config_class=Config):
         """Wallet dashboard demo"""
         try:
             return render_template("wallet.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "Wallet demo template not found"
 
     @app.route("/communities-demo")
@@ -164,7 +179,8 @@ def create_app(config_class=Config):
         """Communities dashboard demo"""
         try:
             return render_template("communities.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "Communities demo template not found"
 
     @app.route("/campaigns-demo")
@@ -172,7 +188,8 @@ def create_app(config_class=Config):
         """Campaigns dashboard demo"""
         try:
             return render_template("campaigns.html")
-        except:
+        except Exception as e:
+            app.logger.debug(f"Template not found: {e}")
             return "Campaigns demo template not found"
 
     @app.route("/checkout-demo")

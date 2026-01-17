@@ -366,9 +366,17 @@ class SecurityMiddleware:
 
         for pattern in suspicious_patterns:
             if pattern in user_agent or pattern in path:
+                # Try to get user identity if JWT is available
+                try:
+                    from flask_jwt_extended import verify_jwt_in_request
+                    verify_jwt_in_request(optional=True)
+                    user_id = get_jwt_identity()
+                except Exception:
+                    user_id = None
+                    
                 SecurityService().log_security_event(
                     "suspicious_request",
-                    get_jwt_identity(),
+                    user_id,
                     request.remote_addr,
                     {"pattern": pattern, "user_agent": user_agent, "path": path},
                 )

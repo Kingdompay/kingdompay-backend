@@ -108,7 +108,8 @@ class MpesaC2B:
             try:
                 error_data = e.response.json()
                 error_msg = error_data.get("errorMessage", error_msg)
-            except:
+            except (ValueError, KeyError, AttributeError):
+                # JSON parsing failed or response structure unexpected
                 pass
             get_logger().exception(f"C2B URL registration HTTP error: {error_msg}")
             return {"success": False, "message": error_msg}

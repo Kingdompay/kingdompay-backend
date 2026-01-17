@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from flask import current_app
 from sqlalchemy import and_, or_
 from werkzeug.utils import secure_filename
+from sqlalchemy.exc import IntegrityError
 
 from models.kyc import (
     KYCVerification,
@@ -21,6 +22,7 @@ from models.kyc import (
     DocumentType,
 )
 from services.encryption_service import EncryptionService
+from extensions import db
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +108,15 @@ class KYCService:
             # Create new verification record
             kyc_verification = KYCVerification(
                 user_id=user_id,
-                tier=KYCTier.TIER_0,
-                status=KYCStatus.PENDING,
+                tier=KYCTier.TIER_0.value,
+                status=KYCStatus.PENDING.value,
                 daily_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
                 monthly_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
                 yearly_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
             )
 
-            current_app.db.session.add(kyc_verification)
-            current_app.db.session.commit()
+            db.session.add(kyc_verification)
+            db.session.commit()
 
             # Log the action
             self._log_kyc_action(
@@ -126,7 +128,7 @@ class KYCService:
 
             return kyc_verification.to_dict()
         except Exception as e:
-            current_app.db.session.rollback()
+            db.session.rollback()
             logger.error(f"Failed to create KYC verification: {e}")
             return {"error": "Failed to create KYC verification"}
 
@@ -139,6 +141,12 @@ class KYCService:
     ) -> Dict[str, Any]:
         """Upload and process KYC document"""
         try:
+            # Convert user_id to int if it's a string
+            try:
+                user_id = int(user_id)
+            except (TypeError, ValueError):
+                return {"error": "Invalid user ID"}
+            
             # Validate file
             if not file or not file.filename:
                 return {"error": "No file provided"}
@@ -172,31 +180,72 @@ class KYCService:
             # Calculate file hash
             file_hash = self._calculate_file_hash(file_path)
 
-            # Check for duplicate files
-            existing_doc = KYCDocument.query.filter_by(file_hash=file_hash).first()
+            # Check for duplicate files (but allow re-upload of rejected documents)
+            existing_doc = KYCDocument.query.filter_by(
+                user_id=user_id, 
+                document_type=doc_type.value
+            ).first()
+            
             if existing_doc:
-                os.remove(file_path)  # Remove duplicate file
-                return {"error": "Document already uploaded"}
+                if existing_doc.status == "rejected":
+                    # Allow re-upload - delete old record
+                    db.session.delete(existing_doc)
+                    db.session.commit()
+                    logger.info(f"Deleted rejected document {existing_doc.id} for re-upload")
+                elif existing_doc.status == "pending":
+                    os.remove(file_path)
+                    return {"error": "You already have a pending document of this type"}
+                elif existing_doc.status == "approved":
+                    os.remove(file_path)
+                    return {"error": "You already have an approved document of this type"}
+
+            # Check for exact duplicate by hash
+            hash_duplicate = KYCDocument.query.filter_by(file_hash=file_hash).first()
+            if hash_duplicate and hash_duplicate.user_id != user_id:
+                os.remove(file_path)
+                return {"error": "This document has already been used by another user"}
+
+            # Auto-create KYC verification record if it doesn't exist
+            kyc_verification = KYCVerification.query.filter_by(user_id=user_id).first()
+            if not kyc_verification:
+                kyc_verification = KYCVerification(
+                    user_id=user_id,
+                    tier=KYCTier.TIER_0.value,
+                    status=KYCStatus.PENDING.value,
+                    daily_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
+                    monthly_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
+                    yearly_limit=current_app.config.get("KYC_TIER_0_LIMIT", 10000),
+                )
+                db.session.add(kyc_verification)
+                db.session.flush()  # Get ID without committing
+                logger.info(f"Auto-created KYC verification record for user {user_id}")
+            else:
+                # If KYC was rejected, reset it to pending when new document is uploaded
+                if kyc_verification.status == "rejected":
+                    kyc_verification.status = KYCStatus.PENDING.value
+                    logger.info(f"Reset KYC verification status to pending for user {user_id}")
 
             # Create document record
             kyc_document = KYCDocument(
                 user_id=user_id,
-                document_type=doc_type,
+                document_type=doc_type.value,
                 file_path=file_path,
                 file_hash=file_hash,
                 file_size=file_size,
                 mime_type=file.content_type or "application/octet-stream",
                 extracted_data=metadata,
+                status=KYCStatus.PENDING.value,
             )
 
-            current_app.db.session.add(kyc_document)
-            current_app.db.session.commit()
+            db.session.add(kyc_document)
+            db.session.commit()
 
             # Log the action
             self._log_kyc_action(
                 user_id=user_id,
                 action="document_uploaded",
                 kyc_document_id=kyc_document.id,
+                kyc_verification_id=kyc_verification.id if kyc_verification else None,
                 metadata={
                     "document_type": doc_type.value,
                     "file_size": file_size,
@@ -206,7 +255,7 @@ class KYCService:
 
             return kyc_document.to_dict()
         except Exception as e:
-            current_app.db.session.rollback()
+            db.session.rollback()
             logger.error(f"Failed to upload document: {e}")
             return {"error": "Failed to upload document"}
 
@@ -224,17 +273,17 @@ class KYCService:
             if not document:
                 return {"error": "Document not found"}
 
-            old_status = document.status.value
+            old_status = document.status
 
             # Update document status
-            document.status = KYCStatus(status)
+            document.status = status
             document.verified_by = verifier_id
             document.verified_at = datetime.utcnow()
             document.rejection_reason = rejection_reason
             if extracted_data:
                 document.extracted_data = extracted_data
 
-            current_app.db.session.commit()
+            db.session.commit()
 
             # Log the action
             self._log_kyc_action(
@@ -249,7 +298,7 @@ class KYCService:
 
             return document.to_dict()
         except Exception as e:
-            current_app.db.session.rollback()
+            db.session.rollback()
             logger.error(f"Failed to verify document: {e}")
             return {"error": "Failed to verify document"}
 
@@ -266,8 +315,8 @@ class KYCService:
             if not kyc_verification:
                 return {"error": "KYC verification not found"}
 
-            old_tier = kyc_verification.tier.value
-            old_status = kyc_verification.status.value
+            old_tier = kyc_verification.tier
+            old_status = kyc_verification.status
 
             # Calculate risk score if personal data provided
             risk_score = None
@@ -284,8 +333,8 @@ class KYCService:
                     )
 
             # Update tier and limits
-            kyc_verification.tier = KYCTier(new_tier)
-            kyc_verification.status = KYCStatus.APPROVED
+            kyc_verification.tier = new_tier
+            kyc_verification.status = KYCStatus.APPROVED.value
             kyc_verification.verified_by = verifier_id
             kyc_verification.verified_at = datetime.utcnow()
 
@@ -311,7 +360,7 @@ class KYCService:
                     "KYC_TIER_2_LIMIT", 1000000
                 )
 
-            current_app.db.session.commit()
+            db.session.commit()
 
             # Log the action
             self._log_kyc_action(
@@ -334,7 +383,7 @@ class KYCService:
 
             return kyc_verification.to_dict()
         except Exception as e:
-            current_app.db.session.rollback()
+            db.session.rollback()
             logger.error(f"Failed to upgrade KYC tier: {e}")
             return {"error": "Failed to upgrade KYC tier"}
 
@@ -374,13 +423,13 @@ class KYCService:
         score = 0.0
 
         # Base score for verification status
-        if kyc_verification.status == KYCStatus.APPROVED:
+        if kyc_verification.status == KYCStatus.APPROVED.value:
             score += 50
 
         # Tier bonus
-        if kyc_verification.tier == KYCTier.TIER_1:
+        if kyc_verification.tier == KYCTier.TIER_1.value:
             score += 25
-        elif kyc_verification.tier == KYCTier.TIER_2:
+        elif kyc_verification.tier == KYCTier.TIER_2.value:
             score += 40
 
         # Compliance checks
@@ -427,8 +476,8 @@ class KYCService:
                 notes=notes,
             )
 
-            current_app.db.session.add(audit_log)
-            current_app.db.session.commit()
+            db.session.add(audit_log)
+            db.session.commit()
         except Exception as e:
             logger.error(f"Failed to log KYC action: {e}")
 
@@ -463,11 +512,11 @@ class KYCService:
                 }
 
             # Check if verification is approved
-            if kyc_verification.status != KYCStatus.APPROVED:
+            if kyc_verification.status != KYCStatus.APPROVED.value:
                 return {
                     "allowed": False,
                     "reason": "KYC verification pending",
-                    "current_status": kyc_verification.status.value,
+                    "current_status": kyc_verification.status,
                 }
 
             # Check limits based on transaction type
@@ -485,13 +534,13 @@ class KYCService:
                     "allowed": False,
                     "reason": f"Amount exceeds {transaction_type} limit",
                     "limit": float(limit),
-                    "current_tier": kyc_verification.tier.value,
+                    "current_tier": kyc_verification.tier,
                     "required_tier": self._get_required_tier_for_amount(amount),
                 }
 
             return {
                 "allowed": True,
-                "current_tier": kyc_verification.tier.value,
+                "current_tier": kyc_verification.tier,
                 "limit": float(limit),
             }
         except Exception as e:

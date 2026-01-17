@@ -58,16 +58,28 @@ class Config:
                 },
             }
     else:
+        # PostgreSQL configuration
+        # Render Postgres requires SSL connections
+        connect_args = {
+            "connect_timeout": 30,
+            "application_name": "kingdompay",
+        }
+
+        # Add SSL mode for Render Postgres (required for production)
+        # Check if DATABASE_URL already has sslmode parameter
+        if SQLALCHEMY_DATABASE_URI and "sslmode" not in SQLALCHEMY_DATABASE_URI.lower():
+            # Render Postgres requires SSL, but we'll use 'prefer' to allow fallback
+            # If SSL is required, use 'require' instead
+            sslmode = os.environ.get("DB_SSLMODE", "prefer")
+            connect_args["sslmode"] = sslmode
+
         SQLALCHEMY_ENGINE_OPTIONS = {
             "pool_pre_ping": True,
             "pool_recycle": 300,
             "pool_size": 20,
             "max_overflow": 30,
             "pool_timeout": 30,
-            "connect_args": {
-                "connect_timeout": 30,
-                "application_name": "kingdompay",
-            },
+            "connect_args": connect_args,
         }
 
     # Redis Configuration

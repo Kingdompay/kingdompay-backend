@@ -59,6 +59,10 @@ class AuthService:
                 "message": "Too many OTP requests. Please wait 5 minutes.",
             }
 
+        # Check if user exists (to tell frontend if name is needed)
+        existing_user = User.find_by_phone(validated_phone)
+        is_new_user = existing_user is None
+
         # Generate OTP
         otp = OTPVerification.generate_otp(validated_phone)
 
@@ -71,6 +75,7 @@ class AuthService:
             "success": True,
             "message": "OTP sent successfully",
             "phone_number": validated_phone,
+            "is_new_user": is_new_user,  # Tell frontend if name input is needed
         }
         
         # Include OTP if: development mode OR no SMS provider configured (for testing)
@@ -98,7 +103,7 @@ class AuthService:
                 "message": "Failed to send OTP. Please try again.",
             }
 
-    def verify_otp(self, phone_number, otp_code, full_name=None):
+    def verify_otp(self, phone_number, otp_code, full_name=None, email=None):
         """Verify OTP and create/update user with proper race condition handling"""
         # Validate phone number
         validated_phone = self.validate_phone_number(phone_number)
@@ -118,6 +123,18 @@ class AuthService:
 
                 # Find or create user with proper locking
                 user = User.find_by_phone(validated_phone)
+                
+                # If user exists but is admin phone, ensure they have admin role
+                if user:
+                    admin_phones = current_app.config.get("ADMIN_PHONE_NUMBERS", [])
+                    is_admin_phone = validated_phone in admin_phones or validated_phone in [
+                        "+254700000000",  # Default dev admin
+                        "+254712345678",  # Another default dev admin
+                    ]
+                    if is_admin_phone and user.role != "ADMIN":
+                        user.role = "ADMIN"
+                        db.session.commit()
+                
                 if not user:
                     if not full_name:
                         db.session.rollback()
@@ -125,13 +142,29 @@ class AuthService:
                             "success": False,
                             "message": "Full name is required for new users",
                         }
+                    
+                    if not email:
+                        db.session.rollback()
+                        return {
+                            "success": False,
+                            "message": "Email is required for new users",
+                        }
 
                     # Create new user with proper error handling
                     try:
+                        # Check if this is an admin phone number (dev mode)
+                        admin_phones = current_app.config.get("ADMIN_PHONE_NUMBERS", [])
+                        is_admin = validated_phone in admin_phones or validated_phone in [
+                            "+254700000000",  # Default dev admin
+                            "+254712345678",  # Another default dev admin
+                        ]
+                        
                         user = User(
                             full_name=full_name,
                             phone_number=validated_phone,
+                            email=email,
                             is_phone_verified=True,
+                            role="ADMIN" if is_admin else "USER",
                         )
                         db.session.add(user)
                         db.session.flush()  # Get user ID without committing
@@ -203,6 +236,8 @@ class AuthService:
                     user.is_phone_verified = True
                     if full_name:
                         user.full_name = full_name
+                    if email:
+                        user.email = email
                     db.session.commit()
 
                 # Generate tokens

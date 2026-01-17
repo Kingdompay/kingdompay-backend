@@ -23,4 +23,8 @@ from . import (
     multisig_routes,
     risk_routes,
     mpesa_routes,
+    notification_routes,
+    scheduled_payment_routes,
+    two_factor_routes,
+    currency_routes,
 )

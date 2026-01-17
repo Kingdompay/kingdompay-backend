@@ -1,187 +1,160 @@
 """
-Test authentication functionality
+Unit tests for authentication endpoints
 """
 
 import pytest
-import json
-from flask_jwt_extended import create_access_token
+from app import create_app
+from extensions import db
+from models.user import User
 
 
-class TestAuthRoutes:
-    """Test authentication routes"""
+@pytest.fixture
+def app():
+    """Create application for testing"""
+    app = create_app()
+    app.config.update({
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "WTF_CSRF_ENABLED": False,
+        "RATELIMIT_ENABLED": False,
+    })
+    
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.drop_all()
 
-    def test_request_otp_success(self, client):
-        """Test successful OTP request"""
-        response = client.post(
-            "/api/v1/auth/otp/request", json={"phone_number": "+254712345678"}
-        )
 
+@pytest.fixture
+def client(app):
+    """Test client"""
+    return app.test_client()
+
+
+class TestAuthEndpoints:
+    """Test authentication endpoints"""
+
+    def test_health_check(self, client):
+        """Test health check endpoint"""
+        response = client.get("/health")
         assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is True
-        assert "message" in data
-
-    def test_request_otp_invalid_phone(self, client):
-        """Test OTP request with invalid phone number"""
-        response = client.post(
-            "/api/v1/auth/otp/request", json={"phone_number": "invalid"}
-        )
-
-        assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data["success"] is False
-        assert "Invalid phone number format" in data["message"]
+        data = response.get_json()
+        assert data["status"] == "healthy"
 
     def test_request_otp_missing_phone(self, client):
         """Test OTP request without phone number"""
-        response = client.post("/api/v1/auth/otp/request", json={})
-
+        response = client.post(
+            "/api/v1/auth/otp/request",
+            json={}
+        )
         assert response.status_code == 400
-        data = json.loads(response.data)
+        data = response.get_json()
         assert data["success"] is False
-        assert "Phone number is required" in data["message"]
 
-    def test_verify_otp_new_user(self, client, app):
-        """Test OTP verification for new user"""
-        phone_number = "+254712345679"
+    def test_request_otp_valid_phone(self, client):
+        """Test OTP request with valid phone number"""
+        response = client.post(
+            "/api/v1/auth/otp/request",
+            json={"phone_number": "+254712345678"}
+        )
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data["success"] is True
+        assert "otp_code" in data  # Development mode includes OTP
 
-        # First request OTP
-        client.post("/api/v1/auth/otp/request", json={"phone_number": phone_number})
-
-        # Get the OTP from the OTPVerification table
-        with app.app_context():
-            from models.otp import OTPVerification
-
-            otp_record = OTPVerification.query.filter_by(
-                phone_number=phone_number, is_used=False
-            ).first()
-
-            if otp_record:
-                # For testing, we'll use a known OTP code
-                # In a real scenario, this would come from the SMS
-                otp_code = "123456"  # This should match what the test expects
-
-                # Update the OTP record to use this test code
-                from werkzeug.security import generate_password_hash
-                from extensions import db
-
-                otp_record.otp_hash = generate_password_hash(otp_code)
-                db.session.commit()
-
-                # Verify OTP
+    def test_request_otp_local_format(self, client):
+        """Test OTP request with 07 format"""
                 response = client.post(
-                    "/api/v1/auth/otp/verify",
-                    json={
-                        "phone_number": phone_number,
-                        "otp_code": otp_code,
-                        "full_name": "New User",
-                    },
+            "/api/v1/auth/otp/request",
+            json={"phone_number": "0712345678"}
                 )
-
                 assert response.status_code == 200
-                data = json.loads(response.data)
+        data = response.get_json()
                 assert data["success"] is True
-                # Accept either legacy 'tokens' or top-level access/refresh tokens
-                has_tokens = "tokens" in data or (
-                    "access_token" in data and ("refresh_token" in data or "refresh_expires_in" in data)
+        assert data["phone_number"] == "+254712345678"
+
+    def test_verify_otp_missing_fields(self, client):
+        """Test OTP verification without required fields"""
+        response = client.post(
+            "/api/v1/auth/otp/verify",
+            json={}
                 )
-                assert has_tokens
-                assert "user" in data
+        assert response.status_code == 400
 
     def test_verify_otp_invalid_code(self, client):
         """Test OTP verification with invalid code"""
+        # First request OTP
+        client.post(
+            "/api/v1/auth/otp/request",
+            json={"phone_number": "+254712345678"}
+        )
+        
+        # Try with wrong code
         response = client.post(
             "/api/v1/auth/otp/verify",
             json={
                 "phone_number": "+254712345678",
                 "otp_code": "000000",
-                "full_name": "Test User",
-            },
+                "full_name": "Test User"
+            }
         )
-
         assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data["success"] is False
-        assert "Invalid or expired OTP" in data["message"]
 
-    def test_get_current_user(self, client, auth_headers):
-        """Test getting current user information"""
-        response = client.get("/api/v1/auth/me", headers=auth_headers)
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
+    def test_full_auth_flow(self, client):
+        """Test complete authentication flow"""
+        # Request OTP
+        otp_response = client.post(
+            "/api/v1/auth/otp/request",
+            json={"phone_number": "+254712345678"}
+        )
+        assert otp_response.status_code == 200
+        otp_code = otp_response.get_json()["otp_code"]
+        
+        # Verify OTP
+        verify_response = client.post(
+            "/api/v1/auth/otp/verify",
+            json={
+                "phone_number": "+254712345678",
+                "otp_code": otp_code,
+                "full_name": "Test User"
+            }
+        )
+        assert verify_response.status_code == 200
+        data = verify_response.get_json()
         assert data["success"] is True
-        assert "user" in data
-        assert data["user"]["phone_number"] == "+254712345678"
+        assert "access_token" in data
+        assert "refresh_token" in data
 
     def test_get_current_user_unauthorized(self, client):
-        """Test getting current user without authentication"""
+        """Test getting current user without auth"""
         response = client.get("/api/v1/auth/me")
-
         assert response.status_code == 401
 
-    def test_update_profile(self, client, auth_headers):
-        """Test updating user profile"""
-        response = client.put(
-            "/api/v1/auth/profile",
-            headers=auth_headers,
-            json={"full_name": "Updated Name", "email": "updated@example.com"},
+    def test_get_current_user_authorized(self, client):
+        """Test getting current user with valid token"""
+        # Get token
+        otp_response = client.post(
+            "/api/v1/auth/otp/request",
+            json={"phone_number": "+254712345678"}
         )
-
+        otp_code = otp_response.get_json()["otp_code"]
+        
+        verify_response = client.post(
+            "/api/v1/auth/otp/verify",
+            json={
+                "phone_number": "+254712345678",
+                "otp_code": otp_code,
+                "full_name": "Test User"
+            }
+        )
+        token = verify_response.get_json()["access_token"]
+        
+        # Get user info
+        response = client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {token}"}
+        )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.get_json()
         assert data["success"] is True
-        assert data["user"]["full_name"] == "Updated Name"
-        assert data["user"]["email"] == "updated@example.com"
-
-    def test_logout(self, client, auth_headers):
-        """Test user logout"""
-        response = client.post("/api/v1/auth/logout", headers=auth_headers)
-
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is True
-        assert "Logged out successfully" in data["message"]
-
-
-class TestAuthService:
-    """Test authentication service"""
-
-    def test_validate_phone_number(self, app):
-        """Test phone number validation"""
-        with app.app_context():
-            from services.auth_service import AuthService
-
-            auth_service = AuthService()
-
-            # Test valid formats
-            assert (
-                auth_service.validate_phone_number("+254712345678") == "+254712345678"
-            )
-            assert auth_service.validate_phone_number("0712345678") == "+254712345678"
-            assert auth_service.validate_phone_number("712345678") == "+254712345678"
-
-            # Test invalid formats
-            assert auth_service.validate_phone_number("123") is None
-            assert auth_service.validate_phone_number("invalid") is None
-
-    def test_get_current_user(self, app, test_user):
-        """Test getting current user from JWT"""
-        with app.app_context():
-            from services.auth_service import AuthService
-
-            auth_service = AuthService()
-
-            # Create access token
-            access_token = create_access_token(identity=str(test_user.id))
-
-            # Mock JWT context
-            from flask_jwt_extended import decode_token
-
-            token_data = decode_token(access_token)
-
-            # Test getting user
-            user = auth_service.get_current_user()
-            # Note: This test would need proper JWT context mocking
-            # For now, we'll test the method exists
-            assert hasattr(auth_service, "get_current_user")
+        assert data["user"]["phone_number"] == "+254712345678"

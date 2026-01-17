@@ -18,6 +18,40 @@ auth_service = AuthService()
 @api_v1_bp.route("/communities", methods=["POST"])
 @jwt_required()
 def create_community():
+    """
+    Create a new community
+    ---
+    tags:
+      - Communities
+    security:
+      - Bearer: []
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              example: "Savings Group"
+            type:
+              type: string
+              enum: [CHAMA, SACCO, CHURCH, FAMILY, OTHER]
+              example: "CHAMA"
+            slug:
+              type: string
+              example: "savings-group"
+    responses:
+      201:
+        description: Community created successfully
+      400:
+        description: Invalid request
+      401:
+        description: Unauthorized
+    """
     try:
         user = auth_service.get_current_user()
         if not user:
@@ -77,6 +111,28 @@ def create_community():
 @api_v1_bp.route("/communities", methods=["GET"])
 @jwt_required()
 def list_communities():
+    """
+    List user's communities
+    ---
+    tags:
+      - Communities
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of communities
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            communities:
+              type: array
+              items:
+                type: object
+      401:
+        description: Unauthorized
+    """
     try:
         user = auth_service.get_current_user()
         if not user:
@@ -235,6 +291,47 @@ def create_invite(community_id: int):
                     "message": "An error occurred while processing your request",
                 }
             ),
+            500,
+        )
+
+
+@api_v1_bp.route("/communities/<int:community_id>/join", methods=["POST"])
+@jwt_required()
+def join_community(community_id: int):
+    """Join a community directly (for public communities)"""
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        community = Community.query.get(community_id)
+        if not community:
+            return jsonify({"success": False, "message": "Community not found"}), 404
+
+        # Check if already a member
+        existing = CommunityMember.query.filter_by(
+            community_id=community_id, user_id=user.id
+        ).first()
+        if existing:
+            return jsonify({"success": True, "message": "Already a member", "community_id": community_id}), 200
+
+        # Add as member
+        member = CommunityMember(
+            community_id=community_id,
+            user_id=user.id,
+            role=CommunityRole.MEMBER.value,
+        )
+        db.session.add(member)
+        db.session.commit()
+        
+        return jsonify({"success": True, "community_id": community_id, "message": "Joined successfully"}), 200
+    except Exception:
+        db.session.rollback()
+        return (
+            jsonify({
+                "success": False,
+                "message": "An error occurred while processing your request",
+            }),
             500,
         )
 

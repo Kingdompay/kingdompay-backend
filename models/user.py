@@ -20,6 +20,9 @@ class User(db.Model):
     password = db.Column(db.String(255), nullable=True)  # Optional for OTP-only auth
     is_phone_verified = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
+    role = db.Column(
+        db.String(20), default="USER", nullable=False
+    )  # USER|ADMIN|SUPPORT
     last_login = db.Column(db.DateTime(timezone=True))
     reset_token = db.Column(db.String(255))
     reset_token_expires = db.Column(db.DateTime(timezone=True))
@@ -54,6 +57,13 @@ class User(db.Model):
 
     def to_dict(self):
         """Convert user to dictionary for API responses"""
+        # Get KYC status if available
+        from models.kyc import KYCVerification
+
+        kyc_verification = KYCVerification.query.filter_by(user_id=self.id).first()
+        kyc_status = kyc_verification.status if kyc_verification else None
+        kyc_tier = kyc_verification.tier if kyc_verification else None
+
         return {
             "id": self.id,
             "full_name": self.full_name,
@@ -61,9 +71,20 @@ class User(db.Model):
             "phone_number": self.phone_number,
             "is_phone_verified": self.is_phone_verified,
             "is_active": self.is_active,
+            "role": self.role,
+            "kyc_status": kyc_status,
+            "kyc_tier": kyc_tier,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+    def is_admin(self):
+        """Check if user is an admin"""
+        return self.role == "ADMIN"
+
+    def is_support(self):
+        """Check if user is support staff"""
+        return self.role in ("ADMIN", "SUPPORT")
 
     @classmethod
     def find_by_phone(cls, phone_number):

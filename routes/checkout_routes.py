@@ -24,11 +24,19 @@ ledger_service = LedgerService()
 @api_v1_bp.route("/checkout", methods=["GET"])
 def hosted_checkout():
     """Hosted checkout page"""
-    amount = request.args.get("amount", type=float)
+    amount = request.args.get("amount", type=float, default=0.0)
     memo = request.args.get("memo", "")
     campaign_id = request.args.get("campaign_id", type=int)
     community_id = request.args.get("community_id", type=int)
     checkout_id = request.args.get("checkout_id") or str(uuid.uuid4())
+
+    # Validate amount
+    if amount is None or amount <= 0:
+        return jsonify({
+            "error": True,
+            "message": "Amount is required and must be greater than 0",
+            "code": "INVALID_AMOUNT"
+        }), 400
 
     # Get available providers
     providers = provider_service.list_providers()

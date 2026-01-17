@@ -15,6 +15,7 @@ auth_service = AuthService()
 
 
 @api_v1_bp.route("/webhooks", methods=["POST"])
+@api_v1_bp.route("/webhooks/register", methods=["POST"])  # Alias route
 @jwt_required()
 def register_webhook():
     try:

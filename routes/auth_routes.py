@@ -9,14 +9,41 @@ from flask_limiter.util import get_remote_address
 from routes import api_v1_bp
 from services.auth_service import AuthService
 from extensions import limiter
+from flasgger import swag_from
+from swagger_config import AUTH_OTP_REQUEST_SPEC, AUTH_OTP_VERIFY_SPEC, AUTH_ME_SPEC
 
 auth_service = AuthService()
 
 
 @api_v1_bp.route("/auth/otp/request", methods=["POST", "OPTIONS"])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute;30 per hour")
 def request_otp():
-    """Request OTP for phone number verification"""
+    """
+    Send OTP to phone number for authentication
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - phone_number
+          properties:
+            phone_number:
+              type: string
+              description: Phone number (+254XXXXXXXXX or 07XXXXXXXX)
+              example: "+254712345678"
+    responses:
+      200:
+        description: OTP sent successfully
+      400:
+        description: Invalid phone number
+      429:
+        description: Rate limit exceeded
+    """
     # Handle CORS preflight
     if request.method == "OPTIONS":
         return "", 200
@@ -56,7 +83,37 @@ def request_otp():
 @api_v1_bp.route("/auth/otp/verify", methods=["POST"])
 @limiter.limit("10 per minute")
 def verify_otp():
-    """Verify OTP and authenticate user"""
+    """
+    Verify OTP and get JWT tokens
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - phone_number
+            - otp_code
+          properties:
+            phone_number:
+              type: string
+              example: "+254712345678"
+            otp_code:
+              type: string
+              example: "123456"
+            full_name:
+              type: string
+              description: Required for new users
+              example: "John Doe"
+    responses:
+      200:
+        description: OTP verified, tokens returned
+      401:
+        description: Invalid or expired OTP
+    """
     try:
         data = request.get_json()
 
@@ -73,9 +130,10 @@ def verify_otp():
 
         phone_number = data["phone_number"]
         otp_code = data["otp_code"]
-        full_name = data.get("full_name")  # Optional for existing users
+        full_name = data.get("full_name")  # Required for new users
+        email = data.get("email")  # Required for new users
 
-        result = auth_service.verify_otp(phone_number, otp_code, full_name)
+        result = auth_service.verify_otp(phone_number, otp_code, full_name, email)
 
         if result["success"]:
             return jsonify(result), 200
@@ -121,7 +179,26 @@ def refresh_token():
 @api_v1_bp.route("/auth/me", methods=["GET"])
 @jwt_required()
 def get_current_user():
-    """Get current user information"""
+    """
+    Get current user information
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: User information
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            user:
+              type: object
+      401:
+        description: Unauthorized
+    """
     try:
         user = auth_service.get_current_user()
 

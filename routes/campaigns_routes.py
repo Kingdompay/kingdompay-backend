@@ -21,6 +21,58 @@ receipt_service = ReceiptService()
 notifications = NotificationsService()
 
 
+@api_v1_bp.route("/campaigns", methods=["GET"])
+@jwt_required()
+def list_all_campaigns():
+    """List all campaigns the user has access to (from their communities)"""
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        # Get all communities user is a member of
+        memberships = CommunityMember.query.filter_by(user_id=user.id).all()
+        community_ids = [m.community_id for m in memberships]
+
+        if not community_ids:
+            return jsonify({"success": True, "campaigns": []}), 200
+
+        # Get all campaigns from user's communities
+        campaigns = (
+            Campaign.query.filter(Campaign.community_id.in_(community_ids))
+            .order_by(Campaign.created_at.desc())
+            .all()
+        )
+
+        # Calculate current_amount for each campaign
+        from models.ledger_journal import LedgerJournal
+        from decimal import Decimal
+
+        campaigns_data = []
+        for c in campaigns:
+            campaign_dict = c.to_dict()
+            external_ref = f"CAMPAIGN-{c.id}"
+            journal_entries = LedgerJournal.query.filter_by(
+                external_ref=external_ref
+            ).all()
+            current_amount = sum(
+                Decimal(str(entry.amount)) for entry in journal_entries
+                if entry.amount and entry.amount > 0
+            )
+            campaign_dict["current_amount"] = float(current_amount)
+            campaigns_data.append(campaign_dict)
+
+        return jsonify({"success": True, "campaigns": campaigns_data}), 200
+    except Exception as e:
+        return (
+            jsonify({
+                "success": False,
+                "message": "An error occurred while processing your request",
+            }),
+            500,
+        )
+
+
 @api_v1_bp.route("/campaigns", methods=["POST"])
 @jwt_required()
 def create_campaign():

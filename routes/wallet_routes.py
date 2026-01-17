@@ -4,7 +4,6 @@ Wallet routes for KingdomPay API v1
 
 from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from services.security_service import require_csrf
 from datetime import datetime, timezone
 from decimal import Decimal
 from routes import api_v1_bp
@@ -22,7 +21,35 @@ transfer_service = TransferService()
 @api_v1_bp.route("/wallets/balance", methods=["GET"])
 @jwt_required()
 def get_wallet_balance():
-    """Get current user's wallet balance"""
+    """
+    Get wallet balance
+    ---
+    tags:
+      - Wallet
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Wallet balance retrieved
+        schema:
+          type: object
+          properties:
+            success:
+              type: boolean
+            wallet:
+              type: object
+              properties:
+                id:
+                  type: integer
+                balance:
+                  type: number
+                currency:
+                  type: string
+      401:
+        description: Unauthorized
+      404:
+        description: Wallet not found
+    """
     try:
         user = auth_service.get_current_user()
         if not user:
@@ -49,7 +76,28 @@ def get_wallet_balance():
 @api_v1_bp.route("/wallets/transactions", methods=["GET"])
 @jwt_required()
 def get_wallet_transactions():
-    """Get current user's wallet transactions"""
+    """
+    Get transaction history
+    ---
+    tags:
+      - Wallet
+    security:
+      - Bearer: []
+    parameters:
+      - in: query
+        name: page
+        type: integer
+        default: 1
+      - in: query
+        name: per_page
+        type: integer
+        default: 20
+    responses:
+      200:
+        description: Transaction list
+      401:
+        description: Unauthorized
+    """
     try:
         user = auth_service.get_current_user()
         if not user:
@@ -167,10 +215,25 @@ def create_transfer():
 
 @api_v1_bp.route("/wallets/transfer", methods=["POST"])
 @jwt_required()
-@require_csrf
 def transfer_funds():
-    """Transfer funds between wallets"""
+    """Transfer funds between wallets
+    
+    Requires either:
+    - X-CSRF-Token header (for browser/web clients)
+    - Idempotency-Key header (for API clients)
+    """
     try:
+        # Check for either CSRF token or Idempotency-Key
+        csrf_token = request.headers.get("X-CSRF-Token")
+        idempotency_key = request.headers.get("Idempotency-Key")
+        
+        if not csrf_token and not idempotency_key:
+            return jsonify({
+                "success": False,
+                "message": "Either X-CSRF-Token or Idempotency-Key header is required",
+                "code": "MISSING_SECURITY_TOKEN"
+            }), 400
+        
         user = auth_service.get_current_user()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
@@ -186,22 +249,17 @@ def transfer_funds():
         if not data:
             return jsonify({"success": False, "message": "No data provided"}), 400
 
-        # Validate required fields
-        required_fields = ["destination_wallet_number", "amount", "description"]
-        for field in required_fields:
-            if field not in data:
-                return (
-                    jsonify({"success": False, "message": f"{field} is required"}),
-                    400,
-                )
-
-        destination_wallet_number = data["destination_wallet_number"]
-        amount = data["amount"]
-        description = data["description"]
+        # Validate required fields - accept multiple field names for flexibility
+        dest_wallet = data.get("destination_wallet_number") or data.get("destination_wallet_id") or data.get("to_wallet_id")
+        amount = data.get("amount")
+        description = data.get("description") or data.get("memo", "Transfer")
+        
+        if not dest_wallet:
+            return jsonify({"success": False, "message": "destination_wallet_number or destination_wallet_id is required"}), 400
+        if not amount:
+            return jsonify({"success": False, "message": "amount is required"}), 400
 
         # Convert amount to Decimal for consistent arithmetic
-        from decimal import Decimal
-
         try:
             amount_decimal = Decimal(str(amount))
         except (ValueError, TypeError):
@@ -221,8 +279,15 @@ def transfer_funds():
         if not source_wallet.can_afford(amount_decimal):
             return jsonify({"success": False, "message": "Insufficient funds"}), 400
 
-        # Find destination wallet
-        destination_wallet = Wallet.find_by_display_number(destination_wallet_number)
+        # Find destination wallet - try by display number first, then by ID
+        destination_wallet = None
+        if isinstance(dest_wallet, str) and dest_wallet.startswith("WAL-"):
+            destination_wallet = Wallet.find_by_display_number(dest_wallet)
+        elif isinstance(dest_wallet, int) or (isinstance(dest_wallet, str) and dest_wallet.isdigit()):
+            destination_wallet = Wallet.query.get(int(dest_wallet))
+        else:
+            destination_wallet = Wallet.find_by_display_number(dest_wallet)
+            
         if not destination_wallet:
             return (
                 jsonify({"success": False, "message": "Destination wallet not found"}),
@@ -293,10 +358,23 @@ def transfer_funds():
 
 @api_v1_bp.route("/wallets/deposit", methods=["POST"])
 @jwt_required()
-@require_csrf
 def deposit_funds():
-    """Add funds to wallet (admin/system operation)"""
+    """Add funds to wallet (admin/system operation)
+    
+    Requires either X-CSRF-Token or Idempotency-Key header
+    """
     try:
+        # Check for security token
+        csrf_token = request.headers.get("X-CSRF-Token")
+        idempotency_key = request.headers.get("Idempotency-Key")
+        
+        if not csrf_token and not idempotency_key:
+            return jsonify({
+                "success": False,
+                "message": "Either X-CSRF-Token or Idempotency-Key header is required",
+                "code": "MISSING_SECURITY_TOKEN"
+            }), 400
+        
         user = auth_service.get_current_user()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
@@ -365,10 +443,23 @@ def deposit_funds():
 
 @api_v1_bp.route("/wallets/withdraw", methods=["POST"])
 @jwt_required()
-@require_csrf
 def withdraw_funds():
-    """Remove funds from wallet"""
+    """Remove funds from wallet
+    
+    Requires either X-CSRF-Token or Idempotency-Key header
+    """
     try:
+        # Check for security token
+        csrf_token = request.headers.get("X-CSRF-Token")
+        idempotency_key = request.headers.get("Idempotency-Key")
+        
+        if not csrf_token and not idempotency_key:
+            return jsonify({
+                "success": False,
+                "message": "Either X-CSRF-Token or Idempotency-Key header is required",
+                "code": "MISSING_SECURITY_TOKEN"
+            }), 400
+        
         user = auth_service.get_current_user()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404

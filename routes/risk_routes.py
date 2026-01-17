@@ -7,11 +7,40 @@ from flask_jwt_extended import jwt_required
 from routes import api_v1_bp
 from services.auth_service import AuthService
 from services.risk_service import RiskService
+from services.rbac import require_support
 from decimal import Decimal
 
 
 auth_service = AuthService()
 risk_service = RiskService()
+
+
+@api_v1_bp.route("/risk/velocity", methods=["POST"])
+@jwt_required()
+def check_velocity():
+    """Check velocity limits for a transaction"""
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        data = request.get_json() or {}
+        wallet_id = data.get("wallet_id")
+        amount = data.get("amount")
+
+        if not amount:
+            return jsonify({"success": False, "message": "amount is required"}), 400
+
+        result = risk_service.check_velocity_limits(
+            user_id=user.id,
+            wallet_id=wallet_id,
+            amount=Decimal(str(amount)),
+        )
+
+        return jsonify({"success": True, **result}), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @api_v1_bp.route("/risk/check-transaction", methods=["POST"])

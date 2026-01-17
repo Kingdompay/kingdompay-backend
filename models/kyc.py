@@ -51,14 +51,14 @@ class KYCDocument(db.Model):
         db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4())
     )
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    document_type = db.Column(db.Enum(DocumentType), nullable=False)
+    document_type = db.Column(db.String(50), nullable=False)  # Use string to match DB CHECK constraint
     file_path = db.Column(db.String(500), nullable=False)
     file_hash = db.Column(db.String(64), nullable=False)  # SHA-256 hash
     file_size = db.Column(db.Integer, nullable=False)
     mime_type = db.Column(db.String(100), nullable=False)
 
     # Verification fields
-    status = db.Column(db.Enum(KYCStatus), default=KYCStatus.PENDING, nullable=False)
+    status = db.Column(db.String(20), default=KYCStatus.PENDING.value, nullable=False)
     verified_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     verified_at = db.Column(db.DateTime, nullable=True)
     rejection_reason = db.Column(db.Text, nullable=True)
@@ -90,8 +90,8 @@ class KYCDocument(db.Model):
             "id": self.id,
             "uuid": self.uuid,
             "user_id": self.user_id,
-            "document_type": self.document_type.value,
-            "status": self.status.value,
+            "document_type": self.document_type,
+            "status": self.status,
             "file_size": self.file_size,
             "mime_type": self.mime_type,
             "uploaded_at": self.uploaded_at.isoformat() if self.uploaded_at else None,
@@ -115,9 +115,9 @@ class KYCVerification(db.Model):
         db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True
     )
 
-    # Verification tier and status
-    tier = db.Column(db.Enum(KYCTier), default=KYCTier.TIER_0, nullable=False)
-    status = db.Column(db.Enum(KYCStatus), default=KYCStatus.PENDING, nullable=False)
+    # Verification tier and status (stored as string values to match DB CHECK constraints)
+    tier = db.Column(db.String(20), default=KYCTier.TIER_0.value, nullable=False)
+    status = db.Column(db.String(20), default=KYCStatus.PENDING.value, nullable=False)
 
     # Personal information (encrypted)
     encrypted_personal_data = db.Column(db.Text, nullable=True)
@@ -171,8 +171,8 @@ class KYCVerification(db.Model):
             "id": self.id,
             "uuid": self.uuid,
             "user_id": self.user_id,
-            "tier": self.tier.value,
-            "status": self.status.value,
+            "tier": self.tier,
+            "status": self.status,
             "daily_limit": float(self.daily_limit),
             "monthly_limit": float(self.monthly_limit),
             "yearly_limit": float(self.yearly_limit),

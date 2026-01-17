@@ -1,0 +1,40 @@
+{
+  "auth_tests": {
+    "otp_request": true,
+    "otp_verification": true,
+    "user_creation": true,
+    "wallet_creation": true,
+    "token_generation": true
+  },
+  "otp_tests": {
+    "otp_generation": true,
+    "otp_storage": true,
+    "otp_validation": true,
+    "otp_expiry": true
+  },
+  "mpesa_tests": {
+    "service_initialization": true,
+    "configuration_check": true,
+    "stk_push_initiation": true,
+    "payment_creation": true
+  },
+  "template_tests": {
+    "index_template": true,
+    "auth_template": true,
+    "wallet_template": true,
+    "checkout_template": true
+  },
+  "full_flow_tests": {
+    "user_registration": true,
+    "wallet_funding": true,
+    "payment_initiation": true,
+    "transaction_recording": true
+  },
+  "errors": [],
+  "api_tests": {
+    "health_endpoint": true,
+    "auth_endpoints": true,
+    "wallet_endpoints": true,
+    "mpesa_endpoints": true
+  }
+}
