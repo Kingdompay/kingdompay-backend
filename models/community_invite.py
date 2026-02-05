@@ -27,15 +27,18 @@ class CommunityInvite(db.Model):
         cls, community_id: int, inviter_user_id: int, ttl_minutes: int = 1440
     ):
         token = secrets.token_urlsafe(24)
+        expires_at = datetime.utcnow() + timedelta(minutes=ttl_minutes)
         invite = cls(
             community_id=community_id,
             inviter_user_id=inviter_user_id,
             token=token,
-            expires_at=datetime.utcnow() + timedelta(minutes=ttl_minutes),
+            expires_at=expires_at,
             status="ACTIVE",
         )
         db.session.add(invite)
         db.session.commit()
+        # Return the invite - attributes should be accessible immediately after commit
+        # The route handler will access them right away to avoid any lazy loading issues
         return invite
 
     @classmethod

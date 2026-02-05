@@ -223,7 +223,7 @@ class KYCAuditLog(db.Model):
     user_agent = db.Column(db.String(500), nullable=True)
 
     # Additional data
-    audit_metadata = db.Column(db.JSON, nullable=True)
+    audit_metadata = db.Column("metadata", db.JSON, nullable=True)  # Python attribute is audit_metadata, DB column is metadata
     notes = db.Column(db.Text, nullable=True)
 
     # Timestamp
@@ -259,7 +259,8 @@ class KYCAuditLog(db.Model):
             "new_tier": self.new_tier,
             "performed_by": self.performed_by,
             "ip_address": self.ip_address,
-            "audit_metadata": self.audit_metadata,
+            "user_agent": self.user_agent,
+            "metadata": self.audit_metadata,  # Python attribute is audit_metadata, maps to DB column 'metadata'
             "notes": self.notes,
             "created_at": self.created_at.isoformat(),
         }

@@ -23,6 +23,8 @@ from .fee import TransactionFee, CommunityContribution, CommunityDevelopmentFund
 from .multisig import MultiSigApproval, MultiSigSignature
 from .risk import Blacklist, AMLCase
 from .settlement_batch import SettlementBatch
+from .savings_goal import SavingsGoal
+from .money_request import MoneyRequest
 
 __all__ = [
     "User",
@@ -51,4 +53,6 @@ __all__ = [
     "Blacklist",
     "AMLCase",
     "SettlementBatch",
+    "SavingsGoal",
+    "MoneyRequest",
 ]

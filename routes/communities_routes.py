@@ -2,13 +2,15 @@
 Community routes for KingdomPay API v1
 """
 
-from flask import request, jsonify
+from datetime import datetime, timedelta
+from flask import request, jsonify, current_app
 from flask_jwt_extended import jwt_required
 from routes import api_v1_bp
 from services.auth_service import AuthService
 from extensions import db
 from models.community import Community, CommunityMember, CommunityRole
 from models.community_invite import CommunityInvite
+from models.user import User
 from services.rbac import is_community_admin
 
 
@@ -56,6 +58,13 @@ def create_community():
         user = auth_service.get_current_user()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
+
+        # Check if user is KYC verified
+        if not auth_service.is_user_kyc_verified(user):
+            return jsonify({
+                "success": False,
+                "message": "KYC verification is required to create a community. Please complete your identity verification first."
+            }), 403
 
         data = request.get_json() or {}
         name = data.get("name")
@@ -214,6 +223,59 @@ def update_community(community_id: int):
         )
 
 
+@api_v1_bp.route("/communities/<int:community_id>/members", methods=["GET"])
+@jwt_required()
+def get_community_members(community_id: int):
+    """Return list of members for a community (for manage community view)"""
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        community = Community.query.get(community_id)
+        if not community:
+            return jsonify({"success": False, "message": "Community not found"}), 404
+
+        # Only community members (or admins) can see the membership list
+        membership = CommunityMember.query.filter_by(
+            community_id=community_id, user_id=user.id
+        ).first()
+        if not membership and user.role.upper() != "ADMIN":
+            return jsonify({"success": False, "message": "Forbidden"}), 403
+
+        # Query members with user information using a proper join
+        # Use select_related equivalent by joining and selecting specific columns
+        from sqlalchemy.orm import joinedload
+        
+        member_objs = (
+            CommunityMember.query
+            .options(joinedload(CommunityMember.user))
+            .filter(CommunityMember.community_id == community_id)
+            .all()
+        )
+
+        members = []
+        for m in member_objs:
+            # Access user attributes while session is still active
+            user_obj = m.user
+            members.append(
+                {
+                    "id": m.id,
+                    "user_id": m.user_id,
+                    "full_name": user_obj.full_name if user_obj else None,
+                    "phone_number": user_obj.phone_number if user_obj else None,
+                    "role": m.role,
+                    "joined_at": m.created_at.isoformat() if m.created_at else None,
+                }
+            )
+
+        return jsonify({"success": True, "members": members}), 200
+    except Exception as e:
+        current_app.logger.error(f"Failed to get community members: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"success": False, "message": "Failed to load members"}), 500
+
+
 @api_v1_bp.route("/communities/<int:community_id>", methods=["DELETE"])
 @jwt_required()
 def delete_community(community_id: int):
@@ -263,32 +325,62 @@ def create_invite(community_id: int):
         if not community:
             return jsonify({"success": False, "message": "Community not found"}), 404
 
-        # Enforce RBAC (Admin/Treasurer only)
+        # Enforce RBAC (Admin/Treasurer/Owner)
         if not is_community_admin(user.id, community.id):
-            return jsonify({"success": False, "message": "Forbidden"}), 403
-        ttl = int((request.get_json() or {}).get("ttl_minutes", 1440))
+            return jsonify({"success": False, "message": "Forbidden: You must be the owner or an admin to create invites"}), 403
+        
+        # Get TTL from request body if provided, otherwise use default
+        json_data = request.get_json(silent=True) or {}
+        ttl = int(json_data.get("ttl_minutes", 1440))
         invite = CommunityInvite.create_invite(community_id, user.id, ttl)
+        
+        # Access attributes immediately to avoid lazy loading issues
+        token = str(invite.token) if invite.token else ""
+        
+        # Handle expires_at - it should be a datetime but handle edge cases
+        try:
+            if isinstance(invite.expires_at, datetime):
+                expires_at = invite.expires_at.isoformat()
+            elif hasattr(invite.expires_at, 'isoformat'):
+                expires_at = invite.expires_at.isoformat()
+            else:
+                # Fallback: calculate from TTL
+                expires_at = (datetime.utcnow() + timedelta(minutes=ttl)).isoformat()
+        except (AttributeError, TypeError) as e:
+            current_app.logger.warning(f"Could not format expires_at: {e}, using fallback")
+            expires_at = (datetime.utcnow() + timedelta(minutes=ttl)).isoformat()
+        
         # Placeholder join URL (to be used by mobile/web to open join flow)
-        join_url = f"/join/{invite.token}"
+        join_url = f"/join/{token}"
         return (
             jsonify(
                 {
                     "success": True,
                     "invite": {
-                        "token": invite.token,
+                        "token": token,
                         "join_url": join_url,
-                        "expires_at": invite.expires_at.isoformat(),
+                        "expires_at": expires_at,
                     },
                 }
             ),
             201,
         )
-    except Exception:
+    except ValueError as e:
+        current_app.logger.error(f"Invalid input in create_invite: {str(e)}")
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Invalid input: {str(e)}"}), 400
+    except Exception as e:
+        current_app.logger.error(f"Error creating invite for community {community_id}: {str(e)}", exc_info=True)
+        db.session.rollback()
+        # Check if it's a database connection error
+        error_msg = str(e)
+        if "PGRES_TUPLES_OK" in error_msg or "DatabaseError" in str(type(e).__name__):
+            error_msg = "Database connection error. Please try again."
         return (
             jsonify(
                 {
                     "success": False,
-                    "message": "An error occurred while processing your request",
+                    "message": f"An error occurred while creating invite: {error_msg}",
                 }
             ),
             500,
@@ -303,6 +395,13 @@ def join_community(community_id: int):
         user = auth_service.get_current_user()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
+
+        # Check if user is KYC verified
+        if not auth_service.is_user_kyc_verified(user):
+            return jsonify({
+                "success": False,
+                "message": "KYC verification is required to join a community. Please complete your identity verification first."
+            }), 403
 
         community = Community.query.get(community_id)
         if not community:

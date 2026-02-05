@@ -2,7 +2,7 @@
 
 A comprehensive Flask-based financial platform for communities, churches, and organizations to manage digital wallets, contributions, payments, and KYC compliance.
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -15,24 +15,24 @@ A comprehensive Flask-based financial platform for communities, churches, and or
 - [Testing](#testing)
 - [Contributing](#contributing)
 
-## 🚀 Overview
+## Overview
 
 KingdomPay is a production-ready financial platform designed to provide secure, scalable financial services for communities. The backend API handles user authentication, digital wallet management, transaction processing, KYC compliance, and comprehensive financial operations with enterprise-grade security and reliability.
 
-### 🎯 Key Highlights
+### Key Highlights
 
-- **🔐 Secure Authentication**: OTP-based phone verification with JWT tokens
-- **💰 Digital Wallets**: Complete wallet management with transfers, deposits, and withdrawals
-- **🛡️ KYC Compliance**: Multi-tier verification system with document upload and risk assessment
-- **📊 Real-time Transactions**: Double-entry ledger with comprehensive audit trails
-- **🌐 Frontend Demos**: Interactive HTML templates for testing and demonstration
-- **🏥 Health Monitoring**: Comprehensive system health checks and performance metrics
-- **🐳 Production Ready**: Docker support with cloud deployment (Render) configuration
-- **🧪 Fully Tested**: Complete test suite with unit, integration, and security tests
+- **Secure Authentication**: OTP-based phone verification with JWT tokens
+- **Digital Wallets**: Complete wallet management with transfers, deposits, and withdrawals
+- **KYC Compliance**: Multi-tier verification system with document upload and risk assessment
+- **Real-time Transactions**: Double-entry ledger with comprehensive audit trails
+- **Frontend Demos**: Interactive HTML templates for testing and demonstration
+- **Health Monitoring**: Comprehensive system health checks and performance metrics
+- **Production Ready**: Docker support with cloud deployment (Render) configuration
+- **Fully Tested**: Complete test suite with unit, integration, and security tests
 
-## ✨ Features
+## Features
 
-### 🔐 Authentication & Security
+### Authentication & Security
 
 - **OTP-based Phone Verification**: Secure phone number authentication with SMS delivery
 - **JWT Token Management**: Access and refresh token system with automatic renewal
@@ -40,7 +40,7 @@ KingdomPay is a production-ready financial platform designed to provide secure, 
 - **Data Encryption**: Sensitive data encryption at rest and in transit
 - **Input Validation**: Comprehensive request validation and sanitization
 
-### 💰 Digital Wallet Management
+### Digital Wallet Management
 
 - **Auto Wallet Creation**: Automatic wallet creation for new users
 - **Balance Tracking**: Real-time balance updates with transaction history
@@ -48,14 +48,14 @@ KingdomPay is a production-ready financial platform designed to provide secure, 
 - **Deposit/Withdrawal**: Add and remove funds with audit trails
 - **Display Numbers**: User-friendly wallet identification system
 
-### 📊 Transaction Processing
+### Transaction Processing
 
 - **Double-Entry Ledger**: Complete transaction tracking and audit trails
 - **Transaction History**: Comprehensive transaction logs with pagination
 - **Real-time Updates**: Instant balance updates and transaction confirmations
 - **Transaction Types**: Support for transfers, deposits, withdrawals, and more
 
-### 🛡️ KYC Compliance
+### KYC Compliance
 
 - **Multi-tier Verification**: Tiered KYC system (Tier 0, 1, 2)
 - **Document Upload**: Support for multiple document types (ID, Passport, Utility Bills)
@@ -63,14 +63,14 @@ KingdomPay is a production-ready financial platform designed to provide secure, 
 - **Transaction Limits**: Tier-based transaction limits and monitoring
 - **Audit Trails**: Complete KYC process tracking and compliance logs
 
-### 🏥 Health & Monitoring
+### Health & Monitoring
 
 - **Health Checks**: Multiple health check endpoints for monitoring
 - **System Metrics**: CPU, memory, disk, and database performance monitoring
 - **Database Monitoring**: Connection health and query performance tracking
 - **Redis Monitoring**: Cache performance and connectivity checks
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
@@ -100,7 +100,7 @@ KingdomPay is a production-ready financial platform designed to provide secure, 
 - **OTP Verification**: OTP codes and verification tracking
 - **KYC Models**: Verification records, documents, and compliance tracking
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -165,13 +165,13 @@ curl -X POST http://localhost:5000/api/v1/auth/otp/request \
   -d '{"phone_number": "+254712345678"}'
 ```
 
-## 📚 Documentation
+## Documentation
 
 - **[API Documentation](API_DOCUMENTATION.md)** - Complete API reference with examples
 - **[Setup Guide](SETUP_GUIDE.md)** - Detailed setup instructions for development and production
 - **[Errors and Fixes](ERRORS_AND_FIXES.md)** - Critical issues found and recommended fixes
 
-## 🔗 API Endpoints
+## API Endpoints
 
 ### Authentication & User Management
 
@@ -211,7 +211,7 @@ curl -X POST http://localhost:5000/api/v1/auth/otp/request \
 - `GET /health/ready` - Kubernetes readiness probe endpoint
 - `GET /health/live` - Kubernetes liveness probe endpoint
 
-## 🌐 Frontend Templates & Demos
+## Frontend Templates & Demos
 
 KingdomPay includes interactive HTML templates for testing and demonstration purposes:
 
@@ -274,43 +274,43 @@ python run.py
 # http://localhost:5000/static/transactions.html
 ```
 
-## 📊 Implementation Status
+## Implementation Status
 
-### ✅ Fully Implemented Features
+### Fully Implemented Features
 
 #### Authentication & Security
 
-- ✅ OTP-based phone verification with SMS delivery
-- ✅ JWT token management with refresh tokens
-- ✅ Rate limiting and API protection
-- ✅ Data encryption and security utilities
-- ✅ Comprehensive input validation
+- OTP-based phone verification with SMS delivery
+- JWT token management with refresh tokens
+- Rate limiting and API protection
+- Data encryption and security utilities
+- Comprehensive input validation
 
 #### Digital Wallet System
 
-- ✅ Automatic wallet creation for new users
-- ✅ Real-time balance tracking and updates
-- ✅ Wallet-to-wallet fund transfers
-- ✅ Deposit and withdrawal operations
-- ✅ User-friendly wallet display numbers
-- ✅ Complete transaction history with pagination
+- Automatic wallet creation for new users
+- Real-time balance tracking and updates
+- Wallet-to-wallet fund transfers
+- Deposit and withdrawal operations
+- User-friendly wallet display numbers
+- Complete transaction history with pagination
 
 #### KYC Compliance System
 
-- ✅ Multi-tier KYC verification (Tier 0, 1, 2)
-- ✅ Document upload and management
-- ✅ Risk assessment and scoring
-- ✅ Transaction limit enforcement
-- ✅ Complete audit trails and compliance tracking
-- ✅ Admin verification workflows
+- Multi-tier KYC verification (Tier 0, 1, 2)
+- Document upload and management
+- Risk assessment and scoring
+- Transaction limit enforcement
+- Complete audit trails and compliance tracking
+- Admin verification workflows
 
 #### System Infrastructure
 
-- ✅ Comprehensive health monitoring
-- ✅ Database and Redis connectivity checks
-- ✅ System performance metrics
-- ✅ Docker and cloud deployment support
-- ✅ Complete test suite with coverage
+- Comprehensive health monitoring
+- Database and Redis connectivity checks
+- System performance metrics
+- Docker and cloud deployment support
+- Complete test suite with coverage
 
 ## 🔧 Environment Variables
 
@@ -333,7 +333,7 @@ python run.py
 - `EMAIL_USERNAME` - SMTP username
 - `EMAIL_PASSWORD` - SMTP password
 
-## 🚀 Deployment
+## Deployment
 
 ### Development
 
@@ -378,7 +378,7 @@ See [deploy.md](deploy.md) for detailed Render deployment instructions.
 - **Logging**: Structured logging with log aggregation
 - **Security**: Environment-based secret management
 
-### 🔮 Future Enhancements
+### Future Enhancements
 
 #### Phase 2: Community Features
 
@@ -399,7 +399,7 @@ See [deploy.md](deploy.md) for detailed Render deployment instructions.
 - Real-time notifications
 - API webhooks for third-party integrations
 
-## 🧪 Testing
+## Testing
 
 ### Running Tests
 
@@ -478,14 +478,14 @@ Test coverage reports are generated in the `htmlcov/` directory and include:
 - **Function Coverage**: Function call coverage
 - **Class Coverage**: Class method coverage
 
-## 📈 Monitoring
+## Monitoring
 
 - Health check endpoint: `GET /health`
 - Database connectivity monitoring
 - Rate limiting metrics
 - Error rate tracking
 
-## 🔒 Security
+## Security
 
 - OTP-based authentication
 - JWT token security
@@ -495,7 +495,7 @@ Test coverage reports are generated in the `htmlcov/` directory and include:
 - CORS configuration
 - Encryption for sensitive data
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -503,11 +503,11 @@ Test coverage reports are generated in the `htmlcov/` directory and include:
 4. Add tests
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
 
-## 🆘 Support
+## Support
 
 For issues and questions:
 
@@ -516,7 +516,7 @@ For issues and questions:
 3. Check API documentation
 4. Contact the development team
 
-## 🔄 Version History
+## Version History
 
 - **v1.0.0** - Initial release with basic wallet functionality
 - **v1.1.0** - Added KYC compliance system and document verification

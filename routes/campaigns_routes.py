@@ -81,6 +81,13 @@ def create_campaign():
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
 
+        # Check if user is KYC verified
+        if not auth_service.is_user_kyc_verified(user):
+            return jsonify({
+                "success": False,
+                "message": "KYC verification is required to create a campaign. Please complete your identity verification first."
+            }), 403
+
         data = request.get_json() or {}
         community_id = data.get("community_id")
         title = data.get("title")

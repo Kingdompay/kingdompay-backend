@@ -15,6 +15,7 @@ from werkzeug.security import generate_password_hash
 from extensions import db
 from models.user import User
 from models.otp import OTPVerification
+from models.kyc import KYCVerification, KYCStatus
 from services.sms_service import SMSService
 from services.encryption_service import EncryptionService
 
@@ -103,7 +104,7 @@ class AuthService:
                 "message": "Failed to send OTP. Please try again.",
             }
 
-    def verify_otp(self, phone_number, otp_code, full_name=None, email=None):
+    def verify_otp(self, phone_number, otp_code, full_name=None, email=None, password=None):
         """Verify OTP and create/update user with proper race condition handling"""
         # Validate phone number
         validated_phone = self.validate_phone_number(phone_number)
@@ -136,18 +137,26 @@ class AuthService:
                         db.session.commit()
                 
                 if not user:
+                    # New user - require full name, email, and password (PIN)
                     if not full_name:
                         db.session.rollback()
                         return {
                             "success": False,
                             "message": "Full name is required for new users",
                         }
-                    
+
                     if not email:
                         db.session.rollback()
                         return {
                             "success": False,
                             "message": "Email is required for new users",
+                        }
+
+                    if not password:
+                        db.session.rollback()
+                        return {
+                            "success": False,
+                            "message": "Password/PIN is required for new users",
                         }
 
                     # Create new user with proper error handling
@@ -166,6 +175,8 @@ class AuthService:
                             is_phone_verified=True,
                             role="ADMIN" if is_admin else "USER",
                         )
+                        # Set password/PIN for new user
+                        user.set_password(password)
                         db.session.add(user)
                         db.session.flush()  # Get user ID without committing
 
@@ -207,10 +218,14 @@ class AuthService:
                                 # Final attempt - try to find the user that was created
                                 user = User.find_by_phone(validated_phone)
                                 if user:
-                                    # Update existing user
+                                    # Update existing user and optionally set password/PIN
                                     user.is_phone_verified = True
                                     if full_name:
                                         user.full_name = full_name
+                                    if email:
+                                        user.email = email
+                                    if password:
+                                        user.set_password(password)
                                     db.session.commit()
                                     break
                                 else:
@@ -238,6 +253,9 @@ class AuthService:
                         user.full_name = full_name
                     if email:
                         user.email = email
+                    # Allow existing users to set or update password/PIN during OTP verification
+                    if password:
+                        user.set_password(password)
                     db.session.commit()
 
                 # Generate tokens
@@ -273,6 +291,59 @@ class AuthService:
             "success": False,
             "message": "Failed to process verification after multiple attempts",
         }
+
+    def password_login(self, identifier: str, password: str) -> dict:
+        """Login with email or phone number and password"""
+        try:
+            identifier = (identifier or "").strip()
+            if not identifier or not password:
+                return {"success": False, "message": "Identifier and password are required"}
+
+            user = None
+
+            # Determine if identifier is email or phone
+            if "@" in identifier:
+                # Email login
+                user = User.find_by_email(identifier.lower())
+            else:
+                # Phone login - normalize using validate_phone_number
+                validated_phone = self.validate_phone_number(identifier)
+                if not validated_phone:
+                    return {
+                        "success": False,
+                        "message": "Invalid phone number or email",
+                    }
+                user = User.find_by_phone(validated_phone)
+
+            if not user or not user.password:
+                return {"success": False, "message": "Invalid credentials"}
+
+            if not user.check_password(password):
+                return {"success": False, "message": "Invalid credentials"}
+
+            if not user.is_active:
+                return {"success": False, "message": "Account is disabled"}
+
+            # Generate tokens
+            access_token = create_access_token(identity=str(user.id))
+            refresh_token = create_refresh_token(identity=str(user.id))
+
+            # Update last login
+            user.update_last_login()
+
+            return {
+                "success": True,
+                "message": "Login successful",
+                "user": user.to_dict(),
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+            }
+        except Exception as e:
+            current_app.logger.exception(f"Error in password_login: {str(e)}")
+            return {
+                "success": False,
+                "message": "Failed to login. Please try again.",
+            }
 
     def refresh_token(self):
         """Refresh access token using the current refresh token context"""
@@ -381,3 +452,23 @@ class AuthService:
         """Clean up expired OTPs (call this periodically)"""
         cleaned = OTPVerification.cleanup_expired()
         return {"success": True, "cleaned_count": cleaned}
+
+    def is_user_kyc_verified(self, user):
+        """
+        Check if a user is KYC verified
+        Admins are exempt from KYC verification
+        """
+        if not user:
+            return False
+        
+        # Admins are exempt from KYC verification
+        if user.role and user.role.upper() == "ADMIN":
+            return True
+        
+        # Check KYC verification status
+        kyc_verification = KYCVerification.query.filter_by(user_id=user.id).first()
+        if not kyc_verification:
+            return False
+        
+        # User is verified if status is "approved"
+        return kyc_verification.status == KYCStatus.APPROVED.value

@@ -42,6 +42,8 @@ services:
     restart: unless-stopped
     ports:
       - "5001:5001"
+    env_file:
+      - .env
     environment:
       - PORT=5001
       - APP_ENV=production

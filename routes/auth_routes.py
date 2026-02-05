@@ -132,8 +132,15 @@ def verify_otp():
         otp_code = data["otp_code"]
         full_name = data.get("full_name")  # Required for new users
         email = data.get("email")  # Required for new users
+        password = data.get("password")  # Required for new users (login PIN/password)
 
-        result = auth_service.verify_otp(phone_number, otp_code, full_name, email)
+        result = auth_service.verify_otp(
+            phone_number,
+            otp_code,
+            full_name=full_name,
+            email=email,
+            password=password,
+        )
 
         if result["success"]:
             return jsonify(result), 200
@@ -259,6 +266,47 @@ def logout():
 
         return jsonify(result), 200
 
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "message": "An error occurred while processing your request",
+                }
+            ),
+            500,
+        )
+
+
+@api_v1_bp.route("/auth/login/password", methods=["POST"])
+@limiter.limit("30 per minute")
+def password_login():
+    """
+    Login with email/phone and password
+    ---
+    tags:
+      - Authentication
+    """
+    try:
+        data = request.get_json() or {}
+        identifier = data.get("identifier")
+        password = data.get("password")
+
+        if not identifier or not password:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Identifier and password are required",
+                    }
+                ),
+                400,
+            )
+
+        result = auth_service.password_login(identifier, password)
+
+        status_code = 200 if result.get("success") else 401
+        return jsonify(result), status_code
     except Exception as e:
         return (
             jsonify(

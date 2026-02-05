@@ -53,16 +53,14 @@ def run_tests(test_path=None, verbose=False, coverage=False):
     try:
         result = subprocess.run(cmd, check=True)
         print("\n" + "=" * 50)
-        print("✅ All tests passed!")
+        print("All tests passed!")
         return True
     except subprocess.CalledProcessError as e:
         print("\n" + "=" * 50)
-        print("❌ Tests failed!")
+        print("Tests failed!")
         return False
     except FileNotFoundError:
-        print(
-            "❌ pytest not found. Please install it with: pip install pytest pytest-cov"
-        )
+        print("pytest not found. Please install it with: pip install pytest pytest-cov")
         return False
 
 
@@ -93,7 +91,7 @@ def main():
     if success:
         print("\n🎉 Test run completed successfully!")
         if args.coverage:
-            print("📊 Coverage report generated in htmlcov/index.html")
+            print("Coverage report generated in htmlcov/index.html")
     else:
         print("\n💥 Test run failed!")
         sys.exit(1)

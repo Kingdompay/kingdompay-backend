@@ -64,7 +64,7 @@ class KingdomPaySimulator:
 
     def simulate_user_registration_flow(self, num_users=100):
         """Simulate user registration and wallet creation"""
-        print(f"🔄 Simulating {num_users} user registrations...")
+        print(f"... Simulating {num_users} user registrations...")
 
         start_time = time.time()
         success_count = 0
@@ -99,7 +99,7 @@ class KingdomPaySimulator:
 
                 except Exception as e:
                     error_count += 1
-                    print(f"❌ Error creating user {i}: {str(e)}")
+                    print(f"[FAIL] Error creating user {i}: {str(e)}")
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -120,13 +120,13 @@ class KingdomPaySimulator:
         }
 
         print(
-            f"✅ User registration simulation completed: {success_count}/{num_users} successful"
+            f"[OK] User registration simulation completed: {success_count}/{num_users} successful"
         )
         return success_count, error_count
 
     def simulate_transaction_operations(self, num_transactions=500):
         """Simulate various transaction operations"""
-        print(f"🔄 Simulating {num_transactions} transaction operations...")
+        print(f"... Simulating {num_transactions} transaction operations...")
 
         start_time = time.time()
         success_count = 0
@@ -139,7 +139,7 @@ class KingdomPaySimulator:
             wallets = Wallet.query.limit(50).all()
 
             if not wallets:
-                print("❌ No wallets found for transaction simulation")
+                print("[FAIL] No wallets found for transaction simulation")
                 return 0, 0
 
             for i in range(num_transactions):
@@ -223,7 +223,7 @@ class KingdomPaySimulator:
                 except Exception as e:
                     error_count += 1
                     db.session.rollback()
-                    print(f"❌ Error in transaction {i}: {str(e)}")
+                    print(f"[FAIL] Error in transaction {i}: {str(e)}")
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -244,13 +244,13 @@ class KingdomPaySimulator:
         }
 
         print(
-            f"✅ Transaction simulation completed: {success_count}/{num_transactions} successful"
+            f"[OK] Transaction simulation completed: {success_count}/{num_transactions} successful"
         )
         return success_count, error_count
 
     def simulate_api_endpoints(self, num_requests=200):
         """Simulate API endpoint calls"""
-        print(f"🔄 Simulating {num_requests} API endpoint calls...")
+        print(f"... Simulating {num_requests} API endpoint calls...")
 
         start_time = time.time()
         success_count = 0
@@ -319,12 +319,12 @@ class KingdomPaySimulator:
                         else:
                             error_count += 1
                             print(
-                                f"❌ API error: {endpoint} returned {response.status_code}"
+                                f"[FAIL] API error: {endpoint} returned {response.status_code}"
                             )
 
                     except Exception as e:
                         error_count += 1
-                        print(f"❌ API request error: {str(e)}")
+                        print(f"[FAIL] API request error: {str(e)}")
 
         end_time = time.time()
         total_time = end_time - start_time
@@ -344,12 +344,14 @@ class KingdomPaySimulator:
             },
         }
 
-        print(f"✅ API simulation completed: {success_count}/{num_requests} successful")
+        print(
+            f"[OK] API simulation completed: {success_count}/{num_requests} successful"
+        )
         return success_count, error_count
 
     def simulate_concurrent_operations(self, num_threads=10, operations_per_thread=50):
         """Simulate concurrent operations"""
-        print(f"🔄 Simulating concurrent operations with {num_threads} threads...")
+        print(f"... Simulating concurrent operations with {num_threads} threads...")
 
         start_time = time.time()
         results = []
@@ -446,13 +448,13 @@ class KingdomPaySimulator:
         }
 
         print(
-            f"✅ Concurrent operations completed: {total_success}/{num_threads * operations_per_thread} successful"
+            f"[OK] Concurrent operations completed: {total_success}/{num_threads * operations_per_thread} successful"
         )
         return total_success, total_errors
 
     def simulate_database_stress_test(self, num_operations=1000):
         """Simulate database stress test"""
-        print(f"🔄 Running database stress test with {num_operations} operations...")
+        print(f"... Running database stress test with {num_operations} operations...")
 
         start_time = time.time()
         success_count = 0
@@ -517,13 +519,13 @@ class KingdomPaySimulator:
         }
 
         print(
-            f"✅ Database stress test completed: {success_count}/{num_operations} successful"
+            f"[OK] Database stress test completed: {success_count}/{num_operations} successful"
         )
         return success_count, error_count
 
     def analyze_memory_usage(self):
         """Analyze memory usage patterns"""
-        print("🔄 Analyzing memory usage...")
+        print("... Analyzing memory usage...")
 
         import psutil
         import gc
@@ -591,7 +593,7 @@ class KingdomPaySimulator:
             ),
         }
 
-        print(f"✅ Memory analysis completed")
+        print(f"[OK] Memory analysis completed")
         print(f"   Initial: {initial_memory:.2f} MB")
         print(f"   After creation: {after_creation_memory:.2f} MB")
         print(f"   After cleanup: {after_cleanup_memory:.2f} MB")
@@ -613,15 +615,15 @@ class KingdomPaySimulator:
         self.generate_simulation_report()
 
         print("=" * 60)
-        print("✅ Comprehensive simulation completed!")
+        print("[OK] Comprehensive simulation completed!")
 
     def generate_simulation_report(self):
         """Generate comprehensive simulation report"""
-        print("\n📊 SIMULATION REPORT")
+        print("\n SIMULATION REPORT")
         print("=" * 60)
 
         # Performance Summary
-        print("\n🎯 PERFORMANCE SUMMARY:")
+        print("\n PERFORMANCE SUMMARY:")
         for test_name, metrics in self.results["performance_metrics"].items():
             print(f"\n{test_name.upper()}:")
             print(
@@ -638,7 +640,7 @@ class KingdomPaySimulator:
 
         # API Performance
         if self.results["api_response_times"]:
-            print(f"\n🌐 API PERFORMANCE:")
+            print(f"\n API PERFORMANCE:")
             api_metrics = self.results["api_response_times"]
             print(
                 f"  Success Rate: {(api_metrics['success_count'] / api_metrics['total_requests'] * 100):.1f}%"
@@ -648,7 +650,7 @@ class KingdomPaySimulator:
 
         # Concurrent Operations
         if self.results["concurrent_operations"]:
-            print(f"\n⚡ CONCURRENT OPERATIONS:")
+            print(f"\n CONCURRENT OPERATIONS:")
             concurrent_metrics = self.results["concurrent_operations"]
             print(
                 f"  Success Rate: {(concurrent_metrics['total_success'] / concurrent_metrics['total_operations'] * 100):.1f}%"
@@ -662,7 +664,7 @@ class KingdomPaySimulator:
 
         # Database Performance
         if self.results["database_performance"]:
-            print(f"\n🗄️ DATABASE PERFORMANCE:")
+            print(f"\n DATABASE PERFORMANCE:")
             db_metrics = self.results["database_performance"]
             print(
                 f"  Success Rate: {(db_metrics['success_count'] / db_metrics['total_operations'] * 100):.1f}%"
@@ -679,7 +681,7 @@ class KingdomPaySimulator:
             )
 
         # Recommendations
-        print(f"\n💡 RECOMMENDATIONS:")
+        print(f"\n RECOMMENDATIONS:")
         self.generate_recommendations()
 
         # Save detailed results

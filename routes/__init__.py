@@ -27,4 +27,6 @@ from . import (
     scheduled_payment_routes,
     two_factor_routes,
     currency_routes,
+    savings_routes,
+    money_request_routes,
 )

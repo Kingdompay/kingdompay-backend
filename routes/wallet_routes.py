@@ -6,6 +6,9 @@ from flask import request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from datetime import datetime, timezone
 from decimal import Decimal
+import qrcode
+import io
+import base64
 from routes import api_v1_bp
 from services.auth_service import AuthService
 from services.ledger_service import LedgerService
@@ -250,12 +253,12 @@ def transfer_funds():
             return jsonify({"success": False, "message": "No data provided"}), 400
 
         # Validate required fields - accept multiple field names for flexibility
-        dest_wallet = data.get("destination_wallet_number") or data.get("destination_wallet_id") or data.get("to_wallet_id")
+        dest_wallet = data.get("destination_wallet_number") or data.get("destination_wallet_id") or data.get("to_wallet_id") or data.get("recipient_phone")
         amount = data.get("amount")
         description = data.get("description") or data.get("memo", "Transfer")
         
         if not dest_wallet:
-            return jsonify({"success": False, "message": "destination_wallet_number or destination_wallet_id is required"}), 400
+            return jsonify({"success": False, "message": "destination_wallet_number, destination_wallet_id, or recipient_phone is required"}), 400
         if not amount:
             return jsonify({"success": False, "message": "amount is required"}), 400
 
@@ -279,14 +282,28 @@ def transfer_funds():
         if not source_wallet.can_afford(amount_decimal):
             return jsonify({"success": False, "message": "Insufficient funds"}), 400
 
-        # Find destination wallet - try by display number first, then by ID
+        # Find destination wallet - try by display number first, then by ID, then by phone number
         destination_wallet = None
         if isinstance(dest_wallet, str) and dest_wallet.startswith("WAL-"):
             destination_wallet = Wallet.find_by_display_number(dest_wallet)
         elif isinstance(dest_wallet, int) or (isinstance(dest_wallet, str) and dest_wallet.isdigit()):
             destination_wallet = Wallet.query.get(int(dest_wallet))
         else:
+            # Try as display number first
             destination_wallet = Wallet.find_by_display_number(dest_wallet)
+            
+            # If not found and looks like a phone number, find user by phone and get their wallet
+            if not destination_wallet:
+                from models.user import User
+                from services.auth_service import AuthService
+                auth_service = AuthService()
+                
+                # Normalize phone number
+                normalized_phone = auth_service.validate_phone_number(dest_wallet)
+                if normalized_phone:
+                    recipient_user = User.query.filter_by(phone_number=normalized_phone).first()
+                    if recipient_user:
+                        destination_wallet = Wallet.find_by_user_id(recipient_user.id)
             
         if not destination_wallet:
             return (
@@ -528,3 +545,61 @@ def withdraw_funds():
             ),
             500,
         )
+
+
+@api_v1_bp.route("/wallets/qr-code", methods=["GET"])
+@jwt_required()
+def generate_wallet_qr():
+    """
+    Generate QR code for wallet payment
+    """
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        wallet = Wallet.find_by_user_id(user.id)
+        if not wallet:
+            return jsonify({"success": False, "message": "Wallet not found"}), 404
+
+        # Get optional amount and message from query params
+        amount = request.args.get("amount", type=float)
+        message = request.args.get("message", "")
+
+        # Build QR code data (JSON format for wallet payment)
+        qr_data = {
+            "type": "wallet_payment",
+            "wallet_number": wallet.wallet_number or wallet.display_number,
+            "user_phone": user.phone_number,
+            "user_name": user.full_name
+        }
+        
+        if amount:
+            qr_data["amount"] = amount
+        if message:
+            qr_data["message"] = message
+
+        # Generate QR code
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(str(qr_data))
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to base64
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        img_str = base64.b64encode(buffer.getvalue()).decode()
+
+        return jsonify({
+            "success": True,
+            "qr_code": f"data:image/png;base64,{img_str}",
+            "qr_data": qr_data,
+            "wallet_number": wallet.wallet_number or wallet.display_number
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": "An error occurred while generating QR code"
+        }), 500

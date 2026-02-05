@@ -38,13 +38,13 @@ def test_community_models():
             test_user.set_password("testpassword")
             db.session.add(test_user)
             db.session.commit()
-            print(f"   ✅ Created user: {test_user.id}")
+            print(f"   [OK] Created user: {test_user.id}")
 
             # Create community roles
             print("2. Checking community roles...")
             roles = CommunityRole.query.all()
             if not roles:
-                print("   ⚠️  No community roles found. Creating default roles...")
+                print("   [WARN]  No community roles found. Creating default roles...")
                 default_roles = [
                     ("admin", "Community administrator"),
                     ("moderator", "Community moderator"),
@@ -57,9 +57,9 @@ def test_community_models():
                     role = CommunityRole(role_name=role_name, description=description)
                     db.session.add(role)
                 db.session.commit()
-                print("   ✅ Created default roles")
+                print("   [OK] Created default roles")
             else:
-                print(f"   ✅ Found {len(roles)} existing roles")
+                print(f"   [OK] Found {len(roles)} existing roles")
 
             # Create a community
             print("3. Creating test community...")
@@ -71,7 +71,7 @@ def test_community_models():
             )
             db.session.add(community)
             db.session.commit()
-            print(f"   ✅ Created community: {community.id} - {community.name}")
+            print(f"   [OK] Created community: {community.id} - {community.name}")
 
             # Add user to community
             print("4. Adding user to community...")
@@ -84,7 +84,7 @@ def test_community_models():
             )
             db.session.add(membership)
             db.session.commit()
-            print(f"   ✅ Added user to community as {membership.role}")
+            print(f"   [OK] Added user to community as {membership.role}")
 
             # Create a contribution
             print("5. Creating test contribution...")
@@ -97,7 +97,7 @@ def test_community_models():
             )
             db.session.add(contribution)
             db.session.commit()
-            print(f"   ✅ Created contribution: {contribution.amount}")
+            print(f"   [OK] Created contribution: {contribution.amount}")
 
             # Create a transaction linked to contribution
             print("6. Creating test transaction...")
@@ -112,34 +112,34 @@ def test_community_models():
             )
             db.session.add(transaction)
             db.session.commit()
-            print(f"   ✅ Created transaction: {transaction.reference_number}")
+            print(f"   [OK] Created transaction: {transaction.reference_number}")
 
             # Test relationships
             print("7. Testing relationships...")
 
             # Test user -> communities
             user_communities = Community.get_user_communities(test_user.id)
-            print(f"   ✅ User is member of {len(user_communities)} communities")
+            print(f"   [OK] User is member of {len(user_communities)} communities")
 
             # Test community -> members
             community_members = CommunityMember.get_community_members(community.id)
-            print(f"   ✅ Community has {len(community_members)} members")
+            print(f"   [OK] Community has {len(community_members)} members")
 
             # Test user -> contributions
             user_contributions = Contribution.get_user_contributions(test_user.id)
-            print(f"   ✅ User made {len(user_contributions)} contributions")
+            print(f"   [OK] User made {len(user_contributions)} contributions")
 
             # Test community -> contributions
             community_contributions = Contribution.get_community_contributions(
                 community.id
             )
             print(
-                f"   ✅ Community received {len(community_contributions)} contributions"
+                f"   [OK] Community received {len(community_contributions)} contributions"
             )
 
             # Test total contributions
             total = Contribution.get_total_contributions(community.id)
-            print(f"   ✅ Total contributions to community: {total}")
+            print(f"   [OK] Total contributions to community: {total}")
 
             # Test transaction -> contribution relationship
             transaction_with_contribution = Transaction.query.filter_by(
@@ -147,7 +147,7 @@ def test_community_models():
             ).first()
             if transaction_with_contribution:
                 print(
-                    f"   ✅ Transaction {transaction_with_contribution.reference_number} linked to contribution"
+                    f"   [OK] Transaction {transaction_with_contribution.reference_number} linked to contribution"
                 )
 
             print("\n🎉 All tests passed! Community models are working correctly.")
@@ -160,12 +160,12 @@ def test_community_models():
             db.session.delete(community)
             db.session.delete(test_user)
             db.session.commit()
-            print("   ✅ Test data cleaned up")
+            print("   [OK] Test data cleaned up")
 
             return True
 
         except Exception as e:
-            print(f"❌ Test failed: {e}")
+            print(f"[FAIL] Test failed: {e}")
             db.session.rollback()
             return False
 

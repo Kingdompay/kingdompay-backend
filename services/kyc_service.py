@@ -180,30 +180,29 @@ class KYCService:
             # Calculate file hash
             file_hash = self._calculate_file_hash(file_path)
 
-            # Check for duplicate files (but allow re-upload of rejected documents)
+            # Check for existing documents of same type for this user
             existing_doc = KYCDocument.query.filter_by(
                 user_id=user_id, 
                 document_type=doc_type.value
             ).first()
             
             if existing_doc:
-                if existing_doc.status == "rejected":
-                    # Allow re-upload - delete old record
-                    db.session.delete(existing_doc)
-                    db.session.commit()
-                    logger.info(f"Deleted rejected document {existing_doc.id} for re-upload")
-                elif existing_doc.status == "pending":
-                    os.remove(file_path)
-                    return {"error": "You already have a pending document of this type"}
-                elif existing_doc.status == "approved":
-                    os.remove(file_path)
-                    return {"error": "You already have an approved document of this type"}
+                # For all statuses (pending/approved/rejected), keep history but mark old doc as expired
+                # so users can upload a fresh version without hitting duplicate errors.
+                existing_doc.status = KYCStatus.EXPIRED.value
+                existing_doc.expires_at = datetime.utcnow()
+                logger.info(
+                    f"Marked existing document {existing_doc.id} for user {user_id} "
+                    f"and type {doc_type.value} as expired before uploading a new one"
+                )
 
             # Check for exact duplicate by hash
+            # NOTE: For testing/demo, we now allow the same document file to be used by
+            # multiple users. We keep the hash for audit, but we do NOT block uploads
+            # even if another user has already uploaded an identical file.
+            # If you need to re‑enable strict duplicate checks, restore the previous
+            # logic that rejected when `hash_duplicate.user_id != user_id`.
             hash_duplicate = KYCDocument.query.filter_by(file_hash=file_hash).first()
-            if hash_duplicate and hash_duplicate.user_id != user_id:
-                os.remove(file_path)
-                return {"error": "This document has already been used by another user"}
 
             # Auto-create KYC verification record if it doesn't exist
             kyc_verification = KYCVerification.query.filter_by(user_id=user_id).first()
