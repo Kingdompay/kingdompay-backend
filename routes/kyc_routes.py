@@ -776,3 +776,59 @@ def get_user_stats():
     except Exception as e:
         current_app.logger.error(f"Failed to get user stats: {e}")
         return jsonify({"error": "Failed to get user stats"}), 500
+
+
+@api_v1_bp.route("/admin/stats", methods=["GET"])
+@jwt_required()
+@require_admin
+def get_admin_stats():
+    """Aggregate stats for the admin overview dashboard"""
+    try:
+        from models.transaction import Transaction
+        from datetime import timedelta
+
+        total_users = User.query.count()
+        active_users = User.query.filter_by(is_active=True).count()
+        kyc_pending = KYCVerification.query.filter_by(status="pending").count()
+
+        since_24h = datetime.utcnow() - timedelta(hours=24)
+        transactions_24h = Transaction.query.filter(Transaction.created_at >= since_24h).count()
+
+        return jsonify({
+            "success": True,
+            "total_users": total_users,
+            "active_users": active_users,
+            "transactions_24h": transactions_24h,
+            "kyc_pending": kyc_pending,
+            "suspicious_alerts": 0,
+            "provider_health": {
+                "M-Pesa STK": "healthy",
+                "Equity Bank": "healthy",
+                "Cross-border": "healthy",
+            },
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to get admin stats: {e}")
+        return jsonify({"error": "Failed to get admin stats"}), 500
+
+
+@api_v1_bp.route("/admin/users/<int:user_id>/freeze", methods=["POST"])
+@jwt_required()
+@require_admin
+def freeze_user(user_id):
+    """Toggle freeze (is_active) for a user"""
+    try:
+        from extensions import db as _db
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        user.is_active = not user.is_active
+        _db.session.commit()
+        action = "unfrozen" if user.is_active else "frozen"
+        return jsonify({"success": True, "message": f"User {action}", "is_active": user.is_active}), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to freeze user: {e}")
+        return jsonify({"error": "Failed to update user status"}), 500

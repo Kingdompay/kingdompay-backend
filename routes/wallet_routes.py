@@ -21,6 +21,22 @@ ledger_service = LedgerService()
 transfer_service = TransferService()
 
 
+@api_v1_bp.route("/wallets", methods=["GET"])
+@jwt_required()
+def list_wallets():
+    """List all wallets belonging to the current user"""
+    try:
+        user = auth_service.get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        wallet = Wallet.find_by_user_id(user.id)
+        wallets = [wallet.to_dict()] if wallet else []
+        return jsonify({"success": True, "wallets": wallets}), 200
+    except Exception:
+        return jsonify({"success": False, "message": "An error occurred"}), 500
+
+
 @api_v1_bp.route("/wallets/balance", methods=["GET"])
 @jwt_required()
 def get_wallet_balance():
